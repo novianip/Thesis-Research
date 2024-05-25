@@ -1,0 +1,192 @@
+##---------NORMALITY TEST------------
+##---------check outlier and normality test-----------------
+boxplot(Corg~ORDO, data=DSM_DATATRY3)
+#reorder LC 
+DSM_DATATRY3$LC <- factor (DSM_DATATRY3$LC, level = c("Forest", "Plantation", "Cropland", "Shrubland", "Paddy Field", "Bare Soil"))
+boxplot(Corg~LC, data=DSM_DATATRY3,
+        xlab = "Land Cover",
+        ylab ="C-organik (%)")
+        
+
+boxplot(Corg~GEOLOGY, data=DSM_DATATRY3)
+
+#plot C-organic seluruhnya
+par(mfrow = c (1,2))
+hist(DSM_DATATRY3$Corg)
+qqnorm(DSM_DATATRY3$Corg, plot.it =TRUE, pch = 4, cex = 0.7)
+qqline(DSM_DATATRY3$Corg, col = 'red', lwd =2)
+
+#try to see result that was transform
+#--log--
+par(mfrow = c (1,2))
+hist(log(DATATRY1$Corg))
+qqnorm(log(DATATRY1$Corg), plot.it =TRUE, pch = 4, cex = 0.7)
+qqline(log(DATATRY1$Corg), col = 'red', lwd =2)
+corglog<-log(DATATRY1$Corg)
+
+#--sqrt--
+par(mfrow = c (1,2))
+hist(sqrt(DATATRY1$Corg))
+qqnorm(sqrt(DATATRY1$Corg), plot.it =TRUE, pch = 4, cex = 0.7)
+qqline(sqrt(DATATRY1$Corg), col = 'red', lwd =2)
+corgsqrt<-sqrt(DATATRY1$Corg)
+
+#input column log trans in DATATRY1
+DATATRY1$sqrt_Corg <-sqrt(DATATRY1$Corg)
+names(DATATRY1)
+shapiro.test(DATATRY1$log_Corg)
+shapiro.test(DATATRY1$sqrt_Corg)
+shapiro.test(DATATRY1$Corg)
+shapiro.test(forest$Corg)
+library(MASS)
+try1Corg <-DATATRY1$Corg
+corgboxcox <-boxcox(lm(try1Corg~1))
+#create data frame
+framecorgcox <-data.frame(corgboxcox$x, corgboxcox$y)
+#order new data frame by decreasing y
+framecorgcox2 <-framecorgcox[with(framecorgcox, order(-framecorgcox$corgboxcox.y)),]
+#display the lambda with the greatest
+framecorgcox2[1,]
+#extract lambda
+lambda = framecorgcox2[1, "corgboxcox.x"]
+#transform original data
+try1Corgbox <-(try1Corg^lambda-1)/lambda
+hist(try1Corgbox)
+qqnorm(try1Corgbox, plot.it =TRUE, pch = 4, cex = 0.7)
+qqline(try1Corgbox, col = 'red', lwd =2)
+shapiro.test(try1Corgbox)
+print(try1Corgbox)  #masih bentuk matrix
+
+#*** hasil dari transformasi log dan boxcox hampir mirip cuma beda 0.001, hasil ini blm normal
+
+#plot 1 variabel in each landcover
+library(ggplot2)
+ggplot(DSM_DATATRY1,aes(Corg))+geom_histogram(bins=20)+ 
+  stat_function(fun=dnorm, args=list(mean = mean(DSM_DATATRY1$Corg,
+                                                 na.rm = TRUE), sd = sd(DSM_DATATRY1$Corg, na.rm = TRUE)), colour = "blue",size=1)+
+  labs(x = "DATA try1: C-Organik", y = "Density") + facet_wrap(vars(LC), scales ='free_y')
+
+library(ggpubr)
+ggdensity(Spektral_Corg_DATATRY3, x = "Corg", fill = "lightgray", title = "Corg") +
+  scale_x_continuous(limits = c(-1, 15)) +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+#merge class c-organic with DSM data
+class_corg <-spectral_sentinel[c(2:7)]
+class_corg <-as.data.frame(class_corg)
+
+CSOC_DSM_DATATRY1 <- DSM_DATATRY1 %>% inner_join( class_corg, 
+                                                  by=c('Kode_Sampe'='Kode_Sampe'))
+CSOC_DSM_DATATRY1 <- CSOC_DSM_DATATRY1[c(1:35, 41:42)]
+
+#plot 1 variabel in each corganic class
+library(ggplot2)
+ggplot(CSOC_DSM_DATATRY1,aes(Corg.x))+geom_histogram(bins=20)+ 
+  stat_function(fun=dnorm, args=list(mean = mean(CSOC_DSM_DATATRY1$Corg.x,
+                                                 na.rm = TRUE), sd = sd(CSOC_DSM_DATATRY1$Corg.x, na.rm = TRUE)), colour = "blue",size=1)+
+  labs(x = "DATA try1: C-Organik", y = "Density") + facet_wrap(vars(class_Corg), scales ='free_y')
+
+# change fill and outline color manually 
+ggplot(CSOC_DSM_DATATRY1, aes(x = Corg.x)) +
+  geom_histogram(aes(color = class_Corg, fill = class_Corg), 
+                 position = "identity", bins = 15, alpha = 0.4)
+# scale_color_manual(values = c("#00AFBB", "#E7B800")) +
+# scale_fill_manual(values = c("#00AFBB", "#E7B800"))
+
+#Buat grafik for all variable (column) in each landcover. NOTE DATA HARUS DI TRANSFORM
+library(tidyr)
+sforest <-forest [c(5:29)]
+VER_sforest<- sforest %>%                          # Apply pivot_longer function
+  pivot_longer(colnames(sforest)) %>%
+  as.data.frame()
+head(VER_sforest)
+ggplot(VER_sforest, aes(x = value)) +    # Draw each column as histogram
+  geom_histogram(aes(y=..density..), bins=12) +
+  geom_density(col= 'blue', size = 1)+
+  facet_wrap(~ name, scales = "free")
+
+#normality test
+library(ggpubr)
+library(rstatix)
+
+names(DATATRY1)
+NORM1<-DATATRY1 %>%
+  shapiro.test(NDVI_try1, NDRE_try1, SATVI_try1,EVI_try1, NBR2_try1, CMR_try1, FI_try1, FMR_try1,
+               IOR_try1, MSMMI_try1, LST_try1, CH_10yr, RED_try1, NIR_try1,
+               SWIR1_try1, pH_H2O, pH_KCl, Corg, Pasir, Debu,
+               Liat, ELEV, SLOPE, ASPECT, VDEPTH)
+
+library(pastecs)
+stat.desc(DSM_DATATRY3, norm= T)
+names(forest_DATATRY3)
+round(stat.desc(DSM_DATATRY3[, c("pH_H2O", "pH_KCl",  "Pasir" ,"Debu" , "Liat" ,"KA_Grav", "KA_Vol", "Moisture" ,  
+                                    "Corg",   "log_Corg", "NDVI_try3","NDRE_try3", 
+                                    "SATVI_try3", "EVI_try3",  "NBR2_try3" , "CMR_try3",   "MSMMI_try3", 
+                                    "LST_10yr", "CH_10yr",  "FMR_try3" ,"IOR_try3",  
+                                    "FI_try3" , "VDEPTH" ,   "ELEV"  ,  "SLOPE" , "ASPECT")],
+                basic = FALSE, norm = TRUE), digits =3)
+
+round(stat.desc(ENCO.spectral_DATATRY3[, c( "B2","B3","B4","B5","B6","B7","B8",       
+                                       "B8A","B11","B12","Corg")],
+                basic = FALSE, norm = TRUE), digits =3)
+
+##-----TRANSFORMASI DATA SPEKTRAL------
+t.paddy_DATATRY3 <- s.paddy_DATATRY3[c(1,9,12:15,17,20)]
+t.bareland_DATATRY3 <- s.bareland_DATATRY3[c(1,9,12:14)]
+t.forest_DATATRY3 <- s.forest_DATATRY3[c(1,13:21)]
+t.cropland_DATATRY3<- s.cropland_DATATRY3[c(1,12,18,20,21)]
+t.plantation_DATATRY3 <- s.plantation_DATATRY3[c(1,12,14,17)]
+t.shrubland_DATATRY3 <- s.shrubland_DATATRY3[c(1,12:14)]
+
+##-----TRANSFORMASI DATA COVARIAT------
+tcov.paddy_DATATRY3 <- paddy_DATATRY3[c(1,6,18,20,27,28,30:32,34,35)]
+tcov.bareland_DATATRY3 <- bareland_DATATRY3[c(1,6,10,19,21,22,27,28,32,34)]
+tcov.forest_DATATRY3 <- forest_DATATRY3[c(1,4,5,8,17:20,31:33,35)]
+tcov.cropland_DATATRY3<- cropland_DATATRY3[c(1,17,19,29)]
+tcov.plantation_DATATRY3 <- plantation_DATATRY3[c(1,5,8,17,21,22,28,31,32,33,34)]
+tcov.shrubland_DATATRY3 <- shrubland_DATATRY3[c(1,4,7,8,17,21,28,30,31)]
+
+##---check skewness using histogram in each column----
+library(tidyr)
+his.spectral<- ENCO.spectral_DATATRY3[c(1:11)] %>%                          # Apply pivot_longer function
+            pivot_longer(colnames(ENCO.spectral_DATATRY3[c(1:11)])) %>%
+            as.data.frame()
+head(his.spectral)
+
+ggplot(his.spectral, aes(x = value)) +    # Draw each column as histogram
+  geom_histogram(aes(y=..density..), bins=10) +
+  geom_density(col= 'red', size = 1)+
+  facet_wrap(~ name, scales = "free")
+
+##--TRIAL AND ERROR TO GET THE BEST TRANFORMATION DATA----
+log <- log10(ENCO.spectral_DATATRY3[c(1:11)])
+apply(log,2,shapiro.test)
+sqrt <- sqrt(ENCO.spectral_DATATRY3[c(1:11)])
+apply(sqrt,2,shapiro.test)
+log.neg <- log10(max(tcov.shrubland_DATATRY3$NBR2_try3+1) - tcov.shrubland_DATATRY3$NBR2_try3)
+hist(log.neg)
+shapiro.test(log.neg)
+sqrt.neg <- sqrt(max(tcov.shrubland_DATATRY3$IOR_try3+1) - tcov.shrubland_DATATRY3$IOR_try3)
+shapiro.test(sqrt.neg)
+
+#transform boxcox
+library(MASS)
+bcox <- boxcox(lm(ENCO.spectral_DATATRY3$Corg ~ 1))
+# Exact lambda
+lambda <- bcox$x[which.max(bcox$y)]
+trans_boxcox <- (ENCO.spectral_DATATRY3$Corg^ lambda - 1) / lambda
+hist(trans_boxcox)
+shapiro.test(trans_boxcox)
+print(try1Corgbox)  #masih bentuk matrix
+
+##---check distribution using histogram in each column----
+library(tidyr)
+his.tcov_bareland<- tcov.bareland_DATATRY3[c(2:19)] %>%                          # Apply pivot_longer function
+  pivot_longer(colnames(tcov.bareland_DATATRY3[c(2:19)])) %>%
+  as.data.frame()
+head(his.tcov_bareland)
+ggplot(his.tcov_bareland, aes(x = value)) +    # Draw each column as histogram
+  geom_histogram(aes(y=..density..), bins=10) +
+  geom_density(col= 'red', size = 1)+
+  facet_wrap(~ name, scales = "free")
+
