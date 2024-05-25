@@ -1,0 +1,839 @@
+library(dplyr)
+library(stats)
+library(tidyverse)
+library(sf)
+library(rgdal)
+
+#import data 
+DSM_DATATRY1 <-readOGR("F:/DATA RISET/SHP/KOVARIAT ATRIBUT/DSM_DATATRY1.shp")
+DSM_DATATRY1 <-as.data.frame(DSM_DATATRY1)
+DSM_DATATRY2 <-readOGR("F:/DATA RISET/SHP/KOVARIAT ATRIBUT/DSM_DATATRY2.shp")
+DSM_DATATRY2 <-as.data.frame(DSM_DATATRY2)
+DSM_DATATRY3 <-readOGR("F:/DATA RISET/SHP/KOVARIAT ATRIBUT/DSM_DATATRY3.shp")
+DSM_DATATRY3 <-as.data.frame(DSM_DATATRY3)
+DSM_DATATRY3_vall <-readOGR("F:/DATA RISET/SHP/KOVARIAT ATRIBUT/DSM_DATATRY3_valledited.shp")
+DSM_DATATRY3_vall <-as.data.frame(DSM_DATATRY3_vall)
+
+DSM_DATATRY1 <- DSM_DATATRY1 %>% rename("VDEPTH" ="VDEPT")
+DSM_DATATRY2 <- DSM_DATATRY2 %>% rename("VDEPTH" ="VDEPT",
+                                    "MSMMI_try2" = "MSMMI_try1")
+DSM_DATATRY3 <- DSM_DATATRY3 %>% rename("VDEPTH" ="VDEPT")
+
+##----------------SUMMARY DATA---------------------
+library(pastecs)
+stat.desc(DSM_DATATRY3)
+str(DSM_DATATRY3)
+# summarase groupby
+DSM_DATATRY3[c(14:15,17:35)] %>% group_by(LC) %>% summarise(CORG = mean(Corg),
+                                                            NDVI=mean(NDVI_try3),
+                                                            NDRE=mean(NDRE_try3),
+                                                            SATVI=mean(SATVI_try3),
+                                                            EVI= mean(EVI_try3),
+                                                            NBR2 =mean(NBR2_try3),
+                                                            MSI =mean (FMR_try3),
+                                                            RBRI =mean(IOR_try3),
+                                                            RGRI= mean(FI_try3),
+                                                            STI =mean (CMR_try3),
+                                                            MSMMI =mean (MSMMI_try3))
+
+stat.desc(cropland_DATATRY3[c(11,23)])
+stat.desc(shrubland_DATATRY3[c(11,23)])
+
+##DATA ALG YG SUDAH DIKOREKSI LC
+DSM_DATATRY3_LC[c(3:33)] %>% group_by(LC) %>% summarise(
+                                                        CORG = mean(SOC),
+                                                        NDVI=mean(NDVI),
+                                                        NDRE=mean(NDRE),
+                                                        SATVI=mean(SATVI),
+                                                        EVI= mean(EVI),
+                                                        NBR2 =mean(NBR2),
+                                                        MSI =mean (MSI),
+                                                        RBRI =mean(RBRI),
+                                                        RGRI= mean(RGRI),
+                                                        STI =mean (STI),
+                                                        MSMMI =mean (MSMMI),
+                                                        LST =mean (LST),
+                                                        ELEV =mean (ELEV),
+                                                        SLOPE =mean (SLOPE),
+                                                        VDEPTH =mean (VDEPTH),
+                                                        ASPECT =mean (ASPECT))
+##DATA ALG YG AKAN DIMODELKAN UNTUK ARTIKEL
+DSM_FIN <- DSM_DATATRY3_LC[c(12:33)]
+str(DSM_FIN)
+library(tidyverse)
+setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+library(metan)
+DSM_DATATRY3%>%
+  group_by(LC) %>%
+  summarize(cor=cor(MSMMI_try3, Moisture))
+
+
+
+#using data DSM_data3s means we have sub group, greatgroup, and ordo attribute
+DSM_data3s[c(1:37)] %>% group_by(LC) %>% summarise(CORG = max(Corg)) %>% print (n=50)
+DSM_data3s[c(1:37)] %>% group_by(s_group, LC, KABKOT) %>% count() %>% print (n=50)
+DSM_data3s[c(1:37)] %>% group_by(g_group, LC) %>% summarise(CORG = mean(Corg)) %>%  print (n=50)
+DSM_data3s[c(1:37)] %>% group_by(LC) %>% count() %>% print (n=50)
+DSM_data3s[c(1:37)] %>% group_by(ordo, LC) %>% summarise(CORG = mean(Corg)) %>% print (n=50)
+DSM_data3s[c(1:37)] %>% group_by(ordo, LC) %>% count() %>% print (n=50)
+DSM_data3s[c(1:37)] %>% group_by(GEOLOGY) %>% summarise(CORG = mean(Corg)) %>% print (n=50)
+DSM_data3s[c(1:37)] %>% group_by(GEOLOGY, ordo) %>% count() %>% print (n=60)
+
+summary_DATATRY1 <- as.data.frame(apply(DSM_DATATRY1[c(17:35)],2, summary))
+summary_DATATRY2 <- as.data.frame(apply(DSM_DATATRY2[c(17:31)],2, summary))
+summary_DATATRY3 <- as.data.frame(apply(DSM_DATATRY3[c(17:31)],2, summary))
+
+#data spektral dan C-organik
+Spektral_Corg_DATATRY3 <-spectral_sentinel[c(2:17)]
+Spektral_Corg_DATATRY3 <-as.data.frame(Spektral_Corg_DATATRY3)
+library(dplyr)
+class_data <- DSM_DATATRY3[c(1, 12:14, 36:37)] 
+Spektral_Corg_DATATRY3 <- class_data %>% inner_join(Spektral_Corg_DATATRY3, 
+                              by=c('Kode_Sampe', 'coords.x1','coords.x2'))
+
+## input data soil (great group dan ordo) dari data shp -convert to dataframe (28 Juni 2023)
+point.soil <-readOGR("F:/DATA RISET/SHP/Jenis Tanah/point_SPT_sample146rev.shp")
+point.soil <- as.data.frame(point.soil)
+head(point.soil)
+# make DSM DATA3 dummy to input new categorical soil data (sub group, great group, and ordo)
+DSM_data3s<- point.soil %>% inner_join(DSM_data3, 
+                                      by=c('Kode_Sampe'))
+str(DSM_data3s)
+DSM_data3s <- DSM_data3s[c(1,4:7, 12:43)]
+DSM_data3s <- DSM_data3s %>% rename("s_group" ="USDA14_1")
+head(DSM_data3s)
+library(writexl)
+# write_xlsx(DSM_DATATRY3, "F:\\DATA RISET\\REKAP HASIL OLAH DATA\\DSM DATA TRY3.xlsx")
+# write_xlsx(Spektral_Corg_DATATRY3, "F:\\DATA RISET\\REKAP HASIL OLAH DATA\\DATA Corr_Spektral_DATATRY3.xlsx")
+
+##----------------ONE HOT ENCODING LANDCOVER, GEOLOGY, AND ORDO--------------
+library(caret)
+#one hot encoding LC for cata spectral
+Spectral_DATATRY3 <- Spektral_Corg_DATATRY3[c(9, 12:21, 4)]
+dummy <-dummyVars(" ~ .", data = Spectral_DATATRY3)
+ENCO.spectral_DATATRY3 <- data.frame(predict(dummy, newdata = Spectral_DATATRY3))
+
+#one hot encoding LC for data all covariat
+cov_withlc <- cov_all[c(3:20)]
+dummylc <-dummyVars(" ~ .", data = cov_withlc)
+ENCO.covlc_DATATRY3 <- data.frame(predict(dummylc, newdata = cov_withlc))
+
+#one hot encoding Geology for data all covariat
+cov_withgeo <- cov_all[c(2,4:20)]
+dummygeo <-dummyVars(" ~ .", data = cov_withgeo)
+ENCO.covgeo_DATATRY3 <- data.frame(predict(dummygeo, newdata = cov_withgeo))
+
+#one hot encoding ORDO for data all covariat
+cov_withsoil <- cov_all[c(1,4:20)]
+dummysoil <-dummyVars(" ~ .", data = cov_withsoil)
+ENCO.covsoil_DATATRY3 <- data.frame(predict(dummysoil, newdata = cov_withsoil))
+
+##---------------SPLIT DATA COVARIATE PER LC------------------
+forest_DATATRY3<- DSM_DATATRY3[DSM_DATATRY3$LC ==  "Forest", ]
+bareland_DATATRY3<- DSM_DATATRY3[DSM_DATATRY3$LC ==  "Bare Soil", ]
+plantation_DATATRY3<- DSM_DATATRY3[DSM_DATATRY3$LC ==  "Plantation", ]
+cropland_DATATRY3<- DSM_DATATRY3[DSM_DATATRY3$LC ==  "Cropland", ]
+paddy_DATATRY3<- DSM_DATATRY3[DSM_DATATRY3$LC ==  "Paddy Field", ]
+shrubland_DATATRY3<- DSM_DATATRY3[DSM_DATATRY3$LC ==  "Shrubland", ]
+
+#revisi data LC
+cropland_DATAFIN <- DSM_DATATRY3_LC[DSM_DATATRY3_LC$LC=="Cropland", ]
+stat.desc(cropland_DATAFIN[c(9,10,18,24)], norm=TRUE)
+plantation_DATAFIN <- DSM_DATATRY3_LC[DSM_DATATRY3_LC$LC=="Plantation", ]
+stat.desc(plantation_DATAFIN[c(9,10,18,24)], norm=TRUE)
+forest_DATAFIN <- DSM_DATATRY3_LC[DSM_DATATRY3_LC$LC=="Forest", ]
+shrubland_DATAFIN <- DSM_DATATRY3_LC[DSM_DATATRY3_LC$LC=="Shrubland", ]
+bare_DATAFIN <- DSM_DATATRY3_LC[DSM_DATATRY3_LC$LC=="Bare Fallow", ]
+##-------------SPLIT DATA SPECTRAL PER LC--------------
+s.forest_DATATRY3<- Spektral_Corg_DATATRY3[Spektral_Corg_DATATRY3$LC ==  "Forest", ]
+s.bareland_DATATRY3<- Spektral_Corg_DATATRY3[Spektral_Corg_DATATRY3$LC ==  "Bare Soil", ]
+s.plantation_DATATRY3<- Spektral_Corg_DATATRY3[Spektral_Corg_DATATRY3$LC ==  "Plantation", ]
+s.cropland_DATATRY3<- Spektral_Corg_DATATRY3[Spektral_Corg_DATATRY3$LC ==  "Cropland", ]
+s.paddy_DATATRY3<- Spektral_Corg_DATATRY3[Spektral_Corg_DATATRY3$LC ==  "Paddy Field", ]
+s.shrubland_DATATRY3<- Spektral_Corg_DATATRY3[Spektral_Corg_DATATRY3$LC ==  "Shrubland", ]
+
+# ##-----------------remove outlier---------------------
+# dummyDATATRY1 <- DATATRY1
+# corgdata_try1 <- quantile(dummyDATATRY1$Corg, probs=c(.25, .75), na.rm = FALSE)
+# IQR <- IQR(dummyDATATRY1$Corg)
+# 
+# Lower <- corgdata_try1[1] - 1.5*IQR
+# Upper <- corgdata_try1[2] + 1.5*IQR 
+# 
+# dummyDATATRY12 <- subset(dummyDATATRY1, dummyDATATRY1$Corg > Lower & dummyDATATRY1$Corg < Upper)
+# 
+# dim(dummyDATATRY12)
+
+##----------CORRELATION---------------
+library(corrplot)
+corrplot(cor(DATATRY1[-c(1:4,30:32)]),
+         method = "circle",
+         type = "upper")
+
+names(forest_DATATRY3)
+plot(corr_coef(forest_DATATRY3, pH_H2O, pH_KCl, Pasir, Debu, Liat, 
+               KA_Grav, KA_Vol, Moisture, NDVI_try3, NDRE_try3,   
+               SATVI_try3, EVI_try3, NBR2_try3, CMR_try3, MSMMI_try3, LST_10yr,
+               CH_10yr, FMR_try3, IOR_try3, FI_try3, VDEPTH, ELEV,       
+               SLOPE, ASPECT, Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2.5,
+     size.text.signif = 2.5,
+     legend.title = "Covariate Forest\nPearson's Correlation")
+##------------------------Correlation DATA TRY 3-MSMMI-SMI-----------------
+library(metan)
+c_smi.DATATRY3 <- DSM_DATATRY3[c(9:11, 14, 17, 23, 27, 28)]
+c_smi.DATATRY3 <- c_smi.DATATRY3  %>% rename("MSMMI" ="MSMMI_try3",
+                                              "NDVI" ="NDVI_try3",
+                                              "LST" ="LST_10yr")  
+plot(corr_coef(c_smi.DATATRY3, MSMMI, NDVI, LST),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 4.5,
+     size.text.signif = 4.5,
+     legend.title = "Pearson Correlation")
+
+plot(corr_coef(forest_DATATRY3,
+               KA_Grav,KA_Vol, Moisture, MSMMI_try3, NDVI_try3, Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Covariate Forest\nPearson's Correlation")
+
+plot(corr_coef(plantation_DATAFIN,
+               KA_Grav,KA_Vol, Moisture, MSMMI, NDVI),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Covariate Plantation\nPearson's Correlation")
+
+plot(corr_coef(cropland_DATAFIN,
+               KA_Grav,KA_Vol, Moisture, MSMMI, NDVI),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Covariate Cropland\nPearson's Correlation")
+
+plot(corr_coef(shrubland_DATATRY3,
+               KA_Grav,KA_Vol, Moisture, MSMMI_try3, NDVI_try3),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Covariate Shrubland\nPearson's Correlation")
+
+plot(corr_coef(paddy_DATATRY3,
+               KA_Grav,KA_Vol, Moisture, MSMMI_try3, NDVI_try3),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Covariate Paddy Field\nPearson's Correlation")
+
+plot(corr_coef(bareland_DATATRY3,
+               KA_Grav,KA_Vol, Moisture, MSMMI_try3, NDVI_try3, Corg, LST_10yr),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Covariate Bareland\nPearson's Correlation")
+
+plot(corr_coef(bare_DATAFIN,
+               KA_Grav,KA_Vol, Moisture, NDVI, MSMMI),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Covariate Bare Fallow\nPearson's Correlation")
+
+#covariat INDEKS SPEKTRAL DAN TOPOGRAFI
+library(metan)
+names(c_covbareland)
+plot(corr_coef(c_covbareland, pH_H2O, pH_KCl, log.Pasir, Debu, Liat, 
+               KA_Grav, log.KA_Vol, Moisture, NDVI_try3, NDRE_try3,   
+               SATVI_try3, EVI_try3, log.NBR2_try3, bc.CMR_try3, MSMMI_try3, sqn.LST_10yr,
+               log.CH_10yr, FMR_try3, IOR_try3, FI_try3, log.VDEPTH, ELEV,       
+               log.SLOPE, ASPECT, log_Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2.5,
+     size.text.signif = 2.5,
+     legend.title = "Covariate Bareland\nPearson's Correlation")
+
+names(c_covpaddy)
+plot(corr_coef(c_covpaddy, pH_H2O, pH_KCl, sq.Pasir, Debu, Liat, 
+               KA_Grav, KA_Vol, Moisture, NDVI_try3, log.NDRE_try3,   
+               SATVI_try3, log.EVI_try3, NBR2_try3, CMR_try3, MSMMI_try3, bc.LST_10yr,
+               sqn.CH_10yr, FMR_try3, bc.IOR_try3, bc.FI_try3, sqn.VDEPTH, ELEV,       
+               sq.SLOPE, ASPECT, log_Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2.5,
+     size.text.signif = 2.5,
+     legend.title = "Covariate Paddy Field\nPearson's Correlation")
+
+names(c_covforest)
+plot(corr_coef(c_covforest, logn.pH_H2O, logn.pH_KCl, Pasir, Debu, log.Liat, 
+               KA_Grav, KA_Vol, Moisture, logn.NDVI_try3, logn.NDRE_try3,   
+               log.SATVI_try3, log.EVI_try3, NBR2_try3, CMR_try3, MSMMI_try3, LST_10yr,
+               CH_10yr, FMR_try3, IOR_try3, log.FI_try3, sq.VDEPTH, log.ELEV,       
+               SLOPE, sqn.ASPECT, Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2.5,
+     size.text.signif = 2.5,
+     legend.title = "Covariate Forest\nPearson's Correlation")
+
+names(c_covplantation)
+plot(corr_coef(c_covplantation, pH_H2O, logn.pH_KCl, Pasir, Debu, bc.Liat, 
+               KA_Grav, KA_Vol, Moisture, bc.NDVI_try3, NDRE_try3,   
+               SATVI_try3, EVI_try3, bc.NBR_try3, logn.CMR_try3, MSMMI_try3, LST_10yr,
+               sqn.CH_10yr, FMR_try3, IOR_try3, bc.FI_try3, VDEPTH, sqn.ELEV,       
+               sq.SLOPE, ASPECT, Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2.5,
+     size.text.signif = 2.5,
+     legend.title = "Covariate Plantation\nPearson's Correlation")
+
+
+names(c_covshrubland)
+plot(corr_coef(c_covshrubland, log.pH_H2O, pH_KCl, Pasir, sqn.Debu, log.Liat, 
+               KA_Grav, KA_Vol, Moisture, NDVI_try3, NDRE_try3,   
+               SATVI_try3, EVI_try3, logn.NBR2_try3, CMR_try3, MSMMI_try3, LST_10yr,
+               sqn.CH_10yr, FMR_try3, bc.IOR_try3, log.FI_try3, VDEPTH, ELEV,       
+               SLOPE, ASPECT, Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2.5,
+     size.text.signif = 2.5,
+     legend.title = "Covariate Shrubland\nPearson's Correlation")
+
+names(c_covcropland)
+plot(corr_coef(c_covcropland, pH_H2O, pH_KCl, Pasir, Debu, Liat, 
+               KA_Grav, KA_Vol, Moisture, logn.NDVI_try3, NDRE_try3,   
+               logn.SATVI_try3, EVI_try3, NBR2_try3, CMR_try3, MSMMI_try3, LST_10yr,
+               CH_10yr, log.FMR_try3, IOR_try3, FI_try3, VDEPTH, ELEV,       
+               SLOPE, ASPECT, Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2.5,
+     size.text.signif = 2.5,
+     legend.title = "Covariate Cropland\nPearson's Correlation")
+
+names(DSM_DATATRY3)
+plot(corr_coef(DSM_DATATRY3, pH_H2O, pH_KCl, Pasir, Debu, Liat, 
+               KA_Grav, KA_Vol, Moisture, NDVI_try3, NDRE_try3,   
+               SATVI_try3, EVI_try3, NBR2_try3, CMR_try3, MSMMI_try3, LST_10yr,
+               CH_10yr, FMR_try3, IOR_try3, FI_try3, VDEPTH, ELEV,       
+               SLOPE, ASPECT, Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2.5,
+     size.text.signif = 2.5,
+     legend.title = "Covariate Cropland\nPearson's Correlation")
+#SPECTRAL COVARIAT
+library(metan)
+names(c_bareland_DATATRY3)
+#kita bisa definisikan dulu variabel yang mau di korelasikan
+cor.bareland <- corr_coef(c_bareland_DATATRY3,bc.B2,log.B3,log.B4,B5,B6,       
+                          B7, B8, B8A,B11,B12,log.Corg)
+
+plot(corr_coef(c_bareland_DATATRY3,bc.B2,log.B3,log.B4,B5,B6,       
+               B7, B8, B8A,B11,B12,log.Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "Bareland\nPearson's Correlation")
+
+#atau langsung definisikan dalam plot
+plot(corr_coef(c_bareland_DATATRY3,bc.B2,log.B3,log.B4,B5,B6,       
+               B7, B8, B8A,B11,B12,log.Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "Bareland\nPearson's Correlation")
+
+names (c_cropland_DATATRY3)
+plot(corr_coef(c_cropland_DATATRY3,log.B2,B3,B4,B5,B6,       
+               B7, log.B8, B8A,log.B11,log.B12,Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "Cropland\nPearson's Correlation")
+
+names (c_forest_DATATRY3)
+plot(corr_coef(c_forest_DATATRY3,B2,log.B3,log.B4,bc.B5,bc.B6,       
+               bc.B7, log.B8, bc.B8A,log.B11,log.B12,Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "Forest\nPearson's Correlation")
+
+names (c_paddy_DATATRY3)
+plot(corr_coef(c_paddy_DATATRY3,log.B2,log.B3,bc.B4,bc.B5,B6,       
+               log.B7, B8, B8A,logn.B11,B12,log.Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "Paddy Field\nPearson's Correlation")
+
+names (c_plantation_DATATRY3)
+plot(corr_coef(c_plantation_DATATRY3,log.B2,B3,log.B4,B5,B6,       
+               log.B7, B8, B8A,B11,B12,Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "Plantation\nPearson's Correlation")
+
+names (c_shrubland_DATATRY3)
+plot(corr_coef(c_shrubland_DATATRY3,bc.B2,log.B3,log.B4,B5,B6,       
+               B7, B8, B8A ,B11,B12,Corg),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "Shrubland\nPearson's Correlation")
+
+## 21 Sept 2023
+plot(corr_coef(DSM_DATATRY3_vall,Corg,VDEPT,VDEPTH_E,ELEV),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "Shrubland\nPearson's Correlation")
+#kita juga bisa melihat scatter plot dan historgram data sekaligus dengan corr_plot
+corr_plot(c_bareland_DATATRY3,bc.B2,log.B3,log.B4,B5,B6,       
+          B7, B8, B8A,B11,B12,log.Corg,
+          shape.point = 19,
+          size.point = 2,
+          alpha.point = 0.5,
+          alpha.diag = 0,
+          pan.spacing = 0,
+          col.sign = 'gray',
+          alpha.sign = 0.3,
+          axis.labels = TRUE)
+
+
+cor.barelandnon <- corr_coef(s.bareland_DATATRY3,B2,B3,B4,
+                             B5,B6,B7,B8,B8A,B11,B12,Corg)
+
+plot(cor.barelandnon,
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Pearson's\nCorrelation")
+
+colnames(Spektral_Corg_DATATRY3)
+spek_CORTRY3 <-corr_coef(Spektral_Corg_DATATRY3,B2,B3,B4,
+                         B5,B6,B7,B8,B8A,B11,B12,Corg)
+plot(spek_CORTRY3,
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 4,
+     size.text.signif = 4,
+     legend.title = "Pearson's\nCorrelation")
+
+
+#SPEARMAN CORELATION
+spek_CORTRY3s <- cor(Spektral_Corg_DATATRY3[, c('B2','B3','B4','B5','B6','B7','B8',
+                                                'B8A','B11','B12','Nbr_Corg')], 
+                                                method = "spearman")
+print(spek_CORTRY3s)
+
+cor.test(Spektral_Corg_DATATRY3$B5,Spektral_Corg_DATATRY3$Nbr_Corg,  method = "spearman")
+#--hasil signifikansi korelasi antara spearman dan person sama.. jadi kita bisa pake pearson aja
+
+#ALL COVARIAT
+CORTRY1 <- corr_coef(DATATRY1, NDVI_try1, NDRE_try1, SATVI_try1,EVI_try1, NBR2_try1, CMR_try1, FI_try1, FMR_try1,  
+                     IOR_try1, MSMMI_try1, LST_try1, CH_10yr, ELEV, SLOPE, ASPECT, VDEPTH, Corg, )
+
+CORTRY2 <- corr_coef(DSM_DATATRY2, NDVI_try2, NDRE_try2, SATVI_try2,EVI_try2, NBR2_try2, 
+                     CMR_try2, FI_try2, FMR_try2, IOR_try2, 
+                     MSMMI_try2, LST_try2, CH_10yr, 
+                     ELEV, SLOPE, ASPECT, VDEPTH, Corg,)
+
+CORTRY3 <- corr_coef(DSM_DATATRY3, NDVI_try3, NDRE_try3, SATVI_try3,EVI_try3, NBR2_try3, 
+                     CMR_try3, FI_try3, FMR_try3, IOR_try3, 
+                     MSMMI_try3, LST_10yr, CH_10yr, 
+                     ELEV, SLOPE, ASPECT, VDEPTH, Corg,)
+
+plot(CORTRY3,
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 3.5,
+     size.text.signif = 3.5,
+     legend.title = "Pearson's\nCorrelation"
+)
+CORTRY1log <- corr_coef(DATATRY1, NDVI_try1, NDRE_try1, SATVI_try1,EVI_try1, NBR2_try1, CMR_try1, FI_try1, FMR_try1,  
+                     IOR_try1, MSMMI_try1, LST_try1, CH_10yr, ELEV, SLOPE, ASPECT, VDEPTH, log_Corg, )
+plot(CORTRY1log,
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 12,
+     size.text.cor = 2,
+     size.text.signif = 4,
+     legend.title = "Pearson's\nCorrelation"
+)
+
+##----------CORRELATION WITH DATA ONE HOT ENCODING-----------
+##DATA LC
+names(ENCO.covlc_DATATRY3)
+plot(corr_coef(ENCO.covlc_DATATRY3,
+               LC.Bare.Soil,LC.Cropland,LC.Forest,LC.Paddy.Field,LC.Plantation, 
+               LC.Shrubland,Corg,NDVI,NDRE,SATVI,        
+               EVI,NBR2,CMR,MSMMI,LST_10yr,      
+               CH_10yr,FMR,IOR,FI,VDEPTH,        
+               ELEVATION,SLOPE,ASPECT),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "ENCODING LANDCOVER\nPearson's Correlation")
+##DATA GEOLOGY
+names(ENCO.covgeo_DATATRY3)
+plot(corr_coef(ENCO.covgeo_DATATRY3,
+               GEOLOGY.Qc,GEOLOGY.Ql,GEOLOGY.Qvu,GEOLOGY.Qyd,GEOLOGY.Qyl,GEOLOGY.Qyt,
+               GEOLOGY.Qyu,
+               Corg,NDVI,NDRE,SATVI,        
+               EVI,NBR2,CMR,MSMMI,LST_10yr,      
+               CH_10yr,FMR,IOR,FI,VDEPTH,        
+               ELEVATION,SLOPE,ASPECT),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "ENCODING GEOLOGY\nPearson's Correlation")
+
+##DATA SOIL
+names(ENCO.covsoil_DATATRY3)
+plot(corr_coef(ENCO.covsoil_DATATRY3,
+               ORDO.Andisol,ORDO.Entisol,ORDO.Gawir,ORDO.Inseptisol,
+               Corg,NDVI,NDRE,SATVI,        
+               EVI,NBR2,CMR,MSMMI,LST_10yr,      
+               CH_10yr,FMR,IOR,FI,VDEPTH,        
+               ELEVATION,SLOPE,ASPECT),
+     type = "lower",
+     reorder = FALSE,
+     size.text.lab = 10,
+     size.text.cor = 3,
+     size.text.signif = 3,
+     legend.title = "ENCODING SOIL\nPearson's Correlation")
+
+
+# CORforest1 <- corr_coef(forest, NDVI_try1, NDRE_try1, SATVI_try1,EVI_try1, NBR2_try1, CMR_try1, FI_try1, FMR_try1,  
+#                      IOR_try1, MSMMI_try1, LST_try1, CH_10yr, RED_try1, NIR_try1,   
+#                      SWIR1_try1, ELEV, SLOPE, ASPECT, VDEPTH, Corg, )
+# plot(CORforest1)
+###-------------PCA PROCESS------------
+# Loading Packages
+library(FactoMineR)
+library(pca3d)
+library(devtools)
+library(factoextra)
+
+# PCA ANALYSIS
+PCATRY1 <- DATATRY1[,5:29]
+fpca_TOTAL <- PCA(PCATRY1[,c(1:25)], 
+                  ncp = 18)
+options(max.print=2500)
+fpca_TOTAL$eig
+
+PCATRY1log <- DATATRY1[c(5:21, 23:29, 33)]
+fpca_TOTAL <- PCA(PCATRY1log, 
+                  ncp = 18)
+options(max.print=2500)
+fpca_TOTAL$eig
+
+PCA_c_covforest <- c_covforest[,2:26]
+fpca_TOTAL <- PCA(PCA_c_covforest[,c(1:25)], 
+                  ncp = 18)
+options(max.print=2500)
+fpca_TOTAL$eig
+
+#PCA per DATA DSM TRY 1, 2, 3 without data lab
+PCA_DSM_DATATRY1 <- PCA(DSM_DATATRY1[,c(15,17:35)], 
+                  ncp = 18)
+PCA_DSM_DATATRY2 <- PCA(DSM_DATATRY2[,c(15,17:35)], 
+                        ncp = 18)
+PCA_DSM_DATATRY3 <- PCA(DSM_DATATRY3[,c(15,17:35)], 
+                        ncp = 18)
+# PCAforest1 <-PCA (forest [, 5:29], 
+#                   ncp = 18)
+# options(max.print=2500)
+# PCAforest1$eig
+
+# Biplot of PCA
+Biplot_DSM_DATATRY3 <-prcomp(DSM_DATATRY3[,c(15,17:35)], scale = TRUE)
+fviz_pca_biplot(Biplot_DSM_DATATRY3,
+                label="var", 
+                habillage=DSM_DATATRY3$LC,
+                col.var="black",
+                addEllipses = TRUE, 
+                ellipse.level=0.5)
+
+
+# fpca_TOTALlog <-prcomp(PCATRY1log, scale = TRUE)
+# fpca_TOTALlog
+# fviz_pca_biplot(fpca_TOTALlog,
+#              label="var", 
+#              habillage=DATATRY1$LC,
+#              col.var="black",
+#              addEllipses = TRUE, 
+#              ellipse.level=0.5)
+
+##------------SPECTRAL REFLECTANCE GRAPH SENTINEL-----
+spectral_sentinel1 <- spectral_sentinel[c(8:17)]
+
+#----RESPON SPEKTRAL TERHADAP C-ORGANIK----
+#mean c-organik
+mean_classcorg <- aggregate(spectral_sentinel1, list(shpCLASSCORG$class_Corg), mean)
+mean_classcorg2 <- head(mean_classcorg)
+mean_classcorg2
+#rearrange class c-org
+mean_classcorg2 <- mean_classcorg2 %>% arrange(factor(Group.1, levels = c('SR', 'R', 'S', 'T', 'ST')))
+
+# instead of the first column, we use row names
+rownames(mean_classcorg2) <- mean_classcorg2 [,1]
+mean_classcorg2 <- mean_classcorg2[,-1]
+
+# changing row names of data frame
+rownames(mean_classcorg2) <- c("<1%","1-2%","2-3%","3-5%", ">5%")
+
+mean_classcorg2
+
+# Create a vector of color for the land cover classes for use in plotting
+mycolor <- c('blue','green', 'orange', 'magenta','darkred')
+
+#transform ms from a data.frame to a matrix
+mean_matrix <- as.matrix(mean_classcorg2)
+
+# First create an empty plot
+plot(0, ylim=c(0,0.35), xlim = c(1,10), type='n', xlab="Bands", ylab = "Reflectance")
+# add the different classes
+for (i in 1:nrow(mean_matrix)){
+  lines(mean_matrix[i,], type = "o", lwd = 2, lty = 1, col = mycolor[i])
+}
+# Title
+title(main="Spectral Profile from Sentinel 2A-MSI (DATA TRY 3)", font.main = 2)
+# Legend
+legend("topleft", rownames(mean_matrix),title="C-organik", text.font=4,
+       cex=0.7, col=mycolor, lty = 1, lwd =2, bty = "n")
+
+##-------------RESPON SPEKTRAL TERHADAP KELAS LANDCOVER with generate 300 point------------
+#**spectral profile with random sampel around 300 point
+# input polygon land cover for create random point sample
+shplandcover <- st_read ("F:/DATA RISET/SHP/Land Cover AOI Paten/Landcover_SUBDAS_Cikapundung.shp")
+class(shplandcover)
+# convert sf object to Spatial object
+sp_landcover <- as(shplandcover, "Spatial")
+class(sp_landcover)
+print(sp_landcover)
+# generate 300 point samples from the polygons
+ptsamp <- sp::spsample(sp_landcover, 1000, type='regular')
+print(ptsamp)
+
+# Get the land cover class for each point
+ptsamp_data <- data.frame(ptsamp)
+land_cover <- over(ptsamp, sp_landcover)$Landcover
+land_cover
+ptsamp_data$class <- land_cover
+str(ptsamp_data)
+ptsamp_data$class
+
+# Convert the data.frame back to SpatialPointsDataFrame
+ptsamp_spdf <- SpatialPointsDataFrame(ptsamp_data[, c("x1", "x2")], ptsamp_data)
+
+# Print the resulting SpatialPointsDataFrame and add CRS that same as spectral_stack
+print(ptsamp_spdf)
+print(spectral_stack)
+proj4string(ptsamp_spdf) <-CRS("+proj=longlat +datum=WGS84")
+#///
+
+# extract values with points
+lcspec_ext <- raster::extract(spectral_stack, ptsamp_spdf, sp = 1,
+                      method = "simple")
+lcspec_ext <-lcspec_ext[c(4:13)]
+lcspec_ext
+#mean spectral value using aggregate
+mean_LC1 <- aggregate(lcspec_ext, list(ptsamp_spdf$class),mean)
+mean_LC1<-as.data.frame(mean_LC1@data)
+str(mean_LC1)
+
+# instead of the first column, we use row names
+rownames(mean_LC1) <- mean_LC1 [,1]
+mean_LC1 <- mean_LC1[,-1]
+mean_LC1
+# Create a vector of color for the land cover classes for use in plotting
+mycolor <- c('brown','red','yellow', 'darkgreen', 'magenta', 'green', 'orange')
+
+#transform ms from a data.frame to a matrix
+mean_matrixLC1 <- as.matrix(mean_LC1)
+mean_matrixLC1
+
+# First create an empty plot
+plot(0, ylim=c(0,0.35), xlim = c(1,10), type='n', xlab="Bands", ylab = "Reflectance")
+# add the different classes
+for (i in 1:nrow(mean_matrixLC1)){
+  lines(mean_matrixLC1[i,], type = "o", lwd = 2, lty = 1, col = mycolor[i])
+}
+# Title
+title(main="Spectral Profile from Sentinel 2A-MSI", font.main = 2)
+# Legend
+legend("topleft", rownames(mean_matrixLC1),title="Land cover", text.font=4,
+       cex=0.7, col=mycolor, lty = 1, lwd =2, bty = "n")
+
+
+
+
+# spectral profile with sample grouncheck 146 point, before process can see on Raster base precessing and above the code
+#mean landcover
+mean_LC <-aggregate(spectral_sentinel1, list(shpDATATRY1$LC), mean)
+mean_LC
+mean_LC <-as.data.frame(mean_LC@data)
+
+# instead of the first column, we use row names
+rownames(mean_LC) <- mean_LC [,1]
+mean_LC <- mean_LC[,-1]
+mean_LC
+
+# Create a vector of color for the land cover classes for use in plotting
+mycolor <- c('blue','green', 'orange', 'magenta','darkred', 'darkgreen')
+
+#transform ms from a data.frame to a matrix
+mean_matrixLC <- as.matrix(mean_LC)
+
+# First create an empty plot
+plot(0, ylim=c(0,0.35), xlim = c(1,10), type='n', xlab="Bands", ylab = "Reflectance")
+# add the different classes
+for (i in 1:nrow(mean_matrixLC)){
+  lines(mean_matrixLC[i,], type = "o", lwd = 2, lty = 1, col = mycolor[i])
+}
+# Title
+title(main="Spectral Profile from Sentinel 2A-MSI", font.main = 2)
+# Legend
+legend("topleft", rownames(mean_matrixLC),title="Land cover", text.font=4,
+       cex=0.7, col=mycolor, lty = 1, lwd =2, bty = "n")
+# #-----RENAME COLUMN --
+# spectral_dataclass <- spectral_dataclass %>% rename(
+#                                 "Blue" = "B2",
+#                                 "Green" ="B3",
+#                                 "Red"="B4",
+#                                 "Red_Edge_1"="B5",
+#                                 "Red_Edge_2"="B6",
+#                                 "Red_Edge_3"="B7",
+#                                 "NIR"="B8",
+#                                 "Red_Edge_4"="B8A",
+#                                 "SWIR1"="B11",
+#                                 "SWIR2"= "B12"
+
+##-----save data frame for t-test----
+# df_spectral_corg <-spectral_sentinel[c(5:17)]
+# df_spectral_corg <-as.data.frame(df_spectral_corg)
+
+# df_spectral_LC <-spectral_sentinelLC[c(32:42)]
+# df_spectral_LC <-as.data.frame(df_spectral_LC)
+
+# library("writexl")
+# write_xlsx(df_spectral_corg,"F:\\DATA RISET\\REKAP HASIL OLAH DATA\\Spektral-Corg-DATATRY2.xlsx")
+
+##-----ANOVA TEST for CORG GROUP IN EACH SPEKTRAL---------
+#normality assumssion
+str(df_spectral_corg) 
+tapply(df_spectral_corg$B8A,df_spectral_corg$class_Corg, shapiro.test)
+#data tidak berdistribusi normal
+boxplot(RED_try2~class_Corg, data=df_spectral_corg)
+library(psych)
+describeBy(df_spectral_corg$RED_try2,df_spectral_corg$class_Corg)
+kruskal.test(df_spectral_corg$RED_try2,df_spectral_corg$class_Corg)
+# hanya yang red di data try2 yg berbeda nyata pada setiap kelas Corg
+
+
+##--------------------------SCATTER PLOT--------------------------
+library(ggplot2)
+str(DSM_DATATRY3_vall)
+unique(DSM_DATATRY3rev$LC)
+scatter.data<-DSM_DATATRY3_vall
+scatter.data.rev<-data_revisi
+scatter.data.fin<-DSM_DATATRY3_LC
+str(scatter.data.fin)
+#reoder legend
+scatter.data$LC <- factor(scatter.data$LC, levels = c("Forest", "Plantation", "Cropland", "Shrubland", "Paddy Field", "Bare Soil"))
+
+scatter.data.rev$LC <- factor(scatter.data.rev$LC, levels = c("Hutan", "Perkebunan", "Ladang", "Semak Belukar", "Sawah", "Tanah Kosong"))
+
+scatter.data.fin$LC <- factor(scatter.data.fin$LC, levels = c("Forest", "Plantation", "Cropland", "Shrubland", "Paddy Field", "Bare Fallow"))
+
+#CH AND LST
+ggplot(scatter.data.rev, aes(x = ASPECT , y = Corg)) +
+  geom_point(colour="black",pch=21, size=4, aes(fill= LC)) +
+  scale_fill_manual(values=c("#3C8337", "#11DC62", "#FFE00D", "#999900", "#E909DA", "#FF8000"))+
+  labs(x="Aspek Topografi (°)", y ="C-Organik (%)", fill="Tutupan Lahan") + theme(text = element_text(size = 16))  
+
+ggplot(scatter.data.rev, aes(x = LST_10yr , y = Corg)) +
+  geom_point(colour="black",pch=21, size=4, aes(fill= LC)) +
+  scale_fill_manual(values=c("#3C8337", "#11DC62", "#FFE00D", "#999900", "#E909DA", "#FF8000"))+
+  labs(x="LST (°C)", y ="C-Organik (%)", fill="Land cover")+ theme(text = element_text(size = 16))
+
+#TOPOGRAPHY
+ggplot(scatter.data, aes(x = ELEV , y = Corg)) +
+  geom_point(colour="black",pch=21, size=4, aes(fill= LC)) +
+  scale_fill_manual(values=c("#3C8337", "#11DC62", "#FFE00D", "#999900", "#E909DA", "#FF8000"))+
+  labs(x="Elevasi (m dpl)", y ="C-Organik (%)", fill="Land cover")+ theme(text = element_text(size = 16))
+
+ggplot(scatter.data, aes(x = VDEPTH , y = Corg)) +
+  geom_point(colour="black",pch=21, size=4, aes(fill= LC)) +
+  scale_fill_manual(values=c("#3C8337", "#11DC62", "#FFE00D", "#999900", "#E909DA", "#FF8000"))+
+  labs(x="Valley Depth (m)", y ="C-Organik (%)", fill="Land cover")+ theme(text = element_text(size = 16))
+
+ggplot(scatter.data, aes(x = SLOPE , y = Corg)) +
+  geom_point(colour="black",pch=21, size=4, aes(fill= LC)) +
+  scale_fill_manual(values=c("#3C8337", "#11DC62", "#FFE00D", "#999900", "#E909DA", "#FF8000"))+
+  labs(x="Slope (%)", y ="C-Organik (%)", fill="Land cover")+ theme(text = element_text(size = 16))
+
+ggplot(scatter.data, aes(x = ASPECT , y = Corg)) +
+  geom_point(colour="black",pch=21, size=4, aes(fill= LC)) +
+  scale_fill_manual(values=c("#3C8337", "#11DC62", "#FFE00D", "#999900", "#E909DA", "#FF8000"))+
+  labs(x="Aspect (°)", y ="C-Organik (%)", fill="Land cover")+ theme(text = element_text(size = 16))
+
+
