@@ -1,0 +1,194 @@
+setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+##----------------CUSTOM PARAMETER TUNING RF ver 1----------------------
+customRF <- list(type = c("Classification","Regression"),
+                 library = "randomForest",
+                 loop = NULL)
+
+customRF$parameters <- data.frame(parameter = c("mtry", "ntree", "nodesize"),
+                                  class = rep("numeric", 3),
+                                  label = c("mtry", "ntree", "nodesize"))
+
+customRF$grid <- function(x, y, len = NULL, search = "grid") {}
+
+customRF$fit <- function(x, y, wts, param, lev, last, weights, classProbs) {
+              randomForest(x, y,
+               mtry = param$mtry,
+               ntree=param$ntree,
+               nodesize=param$nodesize)
+}
+
+
+#Predict label
+customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata)
+
+#Predict prob
+customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata, type = "prob")
+
+customRF$sort <- function(x) x[order(x[,1]),]
+customRF$levels <- function(x) x$classes
+
+##----------------CUSTOM PARAMETER TUNING RF ver 2----------------------
+customRF <- list(type = c("Classification","Regression"),
+                 library = "randomForest",
+                 loop = NULL)
+
+customRF$parameters <- data.frame(parameter = c("mtry", "ntree", "nodesize"),
+                                  class = rep("numeric", 3),
+                                  label = c("mtry", "ntree", "nodesize"))
+
+customRF$grid <- function(x, y, len = NULL, search = "grid") {}
+
+customRF$fit <- function(x, y, wts, param, lev, last, weights, classProbs) {
+               randomForest(x, y,
+               mtry = param$mtry,
+               ntree=param$ntree,
+               nodesize=param$nodesize)
+                }
+
+#Predict label
+customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata)
+
+#Predict prob
+customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata, type = "prob")
+
+customRF$sort <- function(x) x[order(x[,1]),]
+customRF$levels <- function(x) x$classes
+
+
+##---------------------FIND THE BEST PARAMETER TUNING IN RF------------
+#----Load Packages----
+library(dplyr)
+library(stats)
+library(tidyverse)
+library(sf)
+library(rgdal)
+library(sp)
+library(raster)
+library(randomForest)
+library(caret)
+
+##for model 1
+
+##for model 2
+data.mod2.rev
+
+#----Train Test Split----
+#Set Seed
+set.seed(123)
+
+#Split the dataset into features and target variable
+
+target <- data.mod1[c(1)]      # select columns as target variable, 2 for N, 3 for P, 4 for K
+
+#----Split data into training and test sets (75% train, 25% test)----
+set.seed(1234)
+train_indices <- sample(nrow(data.mod1.rev), nrow(data.mod1.rev) * 0.75)  # 75% for training
+train_data <- data.mod1.rev[train_indices, ]
+test_data <- data.mod1.rev[-train_indices, ]
+
+#----Set up cross-validation----
+# folds <- createFolds(target, k = 5, returnTrain = TRUE)
+
+#----Build train control variable
+control <- trainControl(method="repeatedcv", 
+                        repeats=5,
+                        number=10,
+                        search="grid",
+                        allowParallel = FALSE)
+
+#----Define the parameter grid for hyperparameter tuning----
+grid <- expand.grid(.mtry=c(1,5,10,20,30),.ntree=c(100,200,500,1000), .nodesize=c(2,5,7,9,11))
+
+#----Perform hyperparameter tuning using k-fold cross-validation on the training set----
+rf_model <- train(x = subset(train_data, select = -Corg),
+                  y = train_data$Corg, 
+                  method=customRF, 
+                  metric="Rsquared", 
+                  tuneGrid=grid, 
+                  trControl=control)
+rf_model
+plot(rf_model)
+summary(rf_model)
+rf_model$finalModel
+# The final values used for the model were mtry = 10, ntree = 100 and nodesize = 2. (25 Juli 2023)
+
+
+##----------------CUSTOM PARAMETER TUNING SVM-R ----------------------
+#----Split data into training and test sets (75% train, 25% test)----
+set.seed(1234)
+train_indices <- sample(nrow(data.mod1.rev), nrow(data.mod1.rev) * 0.75)  # 75% for training
+train_data.svr <- data.mod1.rev[train_indices, ]
+test_data.svr <- data.mod1.rev[-train_indices, ]
+
+
+# perform a grid search 
+# (this might take a few seconds, adjust how fine of grid if taking too long)
+library(e1071)
+svm_grid <- expand.grid(
+            C = c(0.01 , 0.1 , 1 , 5 , 10, 100),         # Values of cost
+            sigma = c(0.01 , 0.1 , 1 , 5, 10, 100 ) # Values of gamma 
+            )
+# Set up the training control with 5-fold cross-validation
+ctrl_svm <- trainControl(method="repeatedcv", 
+                        repeats=5,
+                        number=10,
+                        search="grid",
+                        allowParallel = FALSE)
+
+# Perform the hyperparameter tuning using tune() function
+str(train_data.svr)
+svm_tune <- train(Corg~., 
+                  data= train_data.svr,
+                  method = "svmRadial",
+                  tuneGrid = svm_grid,
+                  trControl = ctrl_svm
+                  
+                  )
+
+svm_tune
+svm_tune$bestTune$sigma
+
+svm_tune$finalModel
+
+# Get the best hyperparameters
+best_sigma <- svm_tune$bestTune$sigma
+best_C <- svm_tune$bestTune$C
+
+# Get the best model
+best_model <- svm_tune$finalModel
+
+# Get the model performance (e.g., RMSE, R-squared, etc.)
+model_performance <- svm_tune$results
+
+
+
+SVR.DUM = svm(Corg~., 
+              data = data.mod1, 
+              kernel="radial",
+              cost= 100,
+              gamma=0.1,
+              scale=FALSE)
+SVR.DUM
+
+library(devtools)
+library(ithir)
+# Internal validation well known as Calibration
+SVR.DUM.C <- predict(SVR.DUM, newdata = data.mod1)
+goof(observed = data.mod1$Corg, predicted = SVR.DUM.C)
+
+
+##------------------------CHECK ANN USING TRAIN--------------------
+library(caret)
+library(nnet)
+ANN_tune <- train(Corg ~ .,           # Replace "Species" with your target variable
+               data = ANN_Train,        # Replace "dataset" with your dataset
+               method = "nnet",
+               size = c(100,50),
+               maxit= 100)
+ANN_tune
+
+##gagal guys (27 Juli 2023)
