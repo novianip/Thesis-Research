@@ -1,0 +1,667 @@
+####--------------BORUTA PROCESS---------------------
+##convert character to factor using mutate
+
+selectTRY1 <- DATATRY1[5:32]
+selectTRY2 <- DATATRY2 [5:33]
+selectTRY1.spect<-Spektral_Corg_DATATRY1[c(1,4:13,16)]
+selectTRY3.spect <-Spektral_Corg_DATATRY3[c(4,9, 12:21)]
+library(dplyr)
+# all character columns to factor:
+selectTRY1 <- mutate_if(selectTRY1, is.character, as.factor)
+selectTRY2 <- mutate_if(selectTRY2, is.character, as.factor)
+selectTRY3.spect <-mutate_if(selectTRY3.spect, is.character, as.factor)
+str(selectTRY3.spect)
+#selectTRY1.spect <-mutate_if(selectTRY1.spect, is.character, as.factor)
+# select character columns 'char1', 'char2', etc. to factor:
+#df <- mutate_at(df, vars(char1, char2), as.factor)
+str(selectTRY1)
+str(selectTRY2)
+str(selectTRY3.spect)
+library(Boruta)
+set.seed(231)
+borutaTRY1 <- Boruta(Corg~.,  data = selectTRY1, doTrace = 2)
+borutaTRY2 <- Boruta(Corg~.,  data = selectTRY2, doTrace = 2)
+boruta.SpectDATATRY1 <- Boruta(Corg~.,  data = selectTRY1.spect, doTrace = 2)
+
+boruta.SpectDATATRY3 <- Boruta(Corg~.,  data = nl.spectral, maxRuns=500, doTrace = 3)
+
+print(boruta.SpectDATATRY3)
+
+#take a call on tentative features
+borutaTRY1fix <- TentativeRoughFix(borutaTRY1)
+print(borutaTRY1fix)
+borutaTRY2fix <- TentativeRoughFix(borutaTRY2)
+print(borutaTRY2fix)
+boruta.SpectDATATRY1.fix <- TentativeRoughFix(boruta.SpectDATATRY1)
+print(boruta.SpectDATATRY1.fix)
+boruta.SpectDATATRY3.fix <- TentativeRoughFix(boruta.SpectDATATRY3)
+print(boruta.SpectDATATRY3.fix)
+
+
+
+plot(borutaTRY1, las = 2, cex.axis = 0.7)
+plot(borutaTRY2, las = 2, cex.axis = 0.7)
+
+plot(borutaTRY1fix, las = 2, cex.axis = 0.7)
+plot(borutaTRY2fix, las = 2, cex.axis = 0.7)
+plot(boruta.SpectDATATRY1.fix, las = 2, cex.axis = 0.7)
+plot(boruta.SpectDATATRY3.fix, las = 2, cex.axis = 0.7)
+plotImpHistory(boruta.SpectDATATRY3.fix)
+
+# THE RESULT OF boruta.SpectDATATRY1
+# Boruta performed 99 iterations in 5.619538 secs.
+# Tentatives roughfixed over the last 99 iterations.
+# 6 attributes confirmed important: B2, B3, B5, B7, B8A and 1 more;
+# 5 attributes confirmed unimportant: B12, B6, LC, NIR_try1, SWIR1_try1;
+
+
+# #-----------Feature Selection each Landcover BORUTA--------##
+# unique(DATATRY1$LC)
+# forest<- DATATRY1[DATATRY1$LC ==  "Forest", ]
+# bareland<- DATATRY1[DATATRY1$LC ==  "Bare Soil", ]
+# plantation<- DATATRY1[DATATRY1$LC ==  "Plantation", ]
+# cropland<- DATATRY1[DATATRY1$LC ==  "Cropland", ]
+# paddy<- DATATRY1[DATATRY1$LC ==  "Paddy Field", ]
+# shrubland<- DATATRY1[DATATRY1$LC ==  "Shrubland", ]
+# 
+# ## FOREST ##
+# selectforest1 <-forest[5:29] 
+# set.seed(111)
+# b.forest1 <- Boruta(Corg~.,  data = selectforest1, doTrace = 2)
+# print(b.forest1)
+# #take a call on tentative features
+# b.forest1fix <- TentativeRoughFix(b.forest1)
+# print(b.forest1fix)
+# plot(b.forest1, las = 2, cex.axis = 0.7)
+# plot(b.forest1fix, las = 2, cex.axis = 0.7)
+# 
+# ## CROPLAND ##
+# selectcrop1 <-cropland[5:29] 
+# set.seed(111)
+# b.crop1 <- Boruta(Corg~.,  data = selectcrop1, doTrace = 2)
+# print(b.crop1)
+# #take a call on tentative features
+# b.crop1fix <- TentativeRoughFix(b.crop1)
+# print(b.crop1fix)
+# plot(b.crop1, las = 2, cex.axis = 0.7)
+# plot(b.crop1fix, las = 2, cex.axis = 0.7)
+# 
+# ## BARELAND ##
+# selectbare1 <-bareland[5:29]
+# set.seed(111)
+# b.bare1 <- Boruta(Corg~.,  data = selectbare1, doTrace = 2)
+# print(b.bare1)
+# #take a call on tentative features
+# b.bare1fix <- TentativeRoughFix(b.bare1)
+# print(b.bare1fix)
+# plot(b.bare1, las = 2, cex.axis = 0.7)
+# plot(b.bare1fix, las = 2, cex.axis = 0.7)
+
+##----------BORUTA SELECTION USING CLASS C-ORG---
+dataclass1 <- DATATRY1CLASS[c(5:19, 23, 27:30)]
+summary(dataclass1)
+str(dataclass1)
+unique(dataclass1$class_Corg)
+dataclass1$class_Corg = as.factor(dataclass1$class_Corg)
+
+
+dataclass3 <- Spektral_Corg_DATATRY3[c(4,10,12:21)]
+dataclass3<-mutate_if(dataclass3, is.character, as.factor)
+
+
+library(Boruta)
+# Perform Boruta search
+boruta_output <- Boruta(class_Corg ~ ., data=na.omit(dataclass3), doTrace=0)  
+names(boruta_output)
+print(boruta_output)
+# Get significant variables including tentatives
+boruta_signif <- getSelectedAttributes(boruta_output, withTentative = TRUE)
+print(boruta_signif)
+plotImpHistory(boruta_output)
+plot(boruta_output, las = 2, cex.axis = 0.7)
+
+# Do a tentative rough fix
+roughFixMod <- TentativeRoughFix(boruta_output)
+boruta_signif <- getSelectedAttributes(roughFixMod)
+print(boruta_signif)
+# Variable Importance Scores
+imps <- attStats(roughFixMod)
+imps2 = imps[imps$decision != 'Rejected', c('meanImp', 'decision')]
+head(imps2[order(-imps2$meanImp), ])  # descending sort
+
+# THE RESULT---with data lab
+# meanImp  decision
+# Liat    14.750538 Confirmed
+# Pasir   13.932489 Confirmed
+# ELEV    12.483956 Confirmed
+# CH_10yr 10.393777 Confirmed
+# VDEPTH   8.159685 Confirmed
+# pH_H2O   5.245414 Confirmed
+
+#THE RESULT- WITHOUT DATA LAB
+# meanImp  decision
+# ELEV     17.009220 Confirmed
+# CH_10yr  14.849354 Confirmed
+# VDEPTH   11.417933 Confirmed
+# LST_try1  8.894459 Confirmed
+# CMR_try1  4.045156 Confirmed
+# RED_try1  3.982041 Confirmed
+
+# Plot variable importance
+plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance") 
+
+
+##---------Recursive Partitioning-CARET VAR IMPORTANT----
+# Train an rpart model and compute variable importance.
+library(caret)
+set.seed(100)
+a2 <- selectTRY3.spect[c(2:12)]
+rPartMod <- train(class_Corg ~ ., data=na.omit(dataclass3), method="rpart")
+rPartMod <- train(Corg ~ ., data=a2, method="rpart", na.action = na.pass)
+rpartImp <- varImp(rPartMod)
+print(rpartImp)
+
+# THE RESULT- WITH DATA LAB
+# rpart variable importance
+# only 20 most important variables shown (out of 24)
+
+# Overall
+# Liat        100.00
+# Pasir        94.91
+# ELEV         89.21
+# CH_10yr      68.89
+# VDEPTH       64.12
+# CMR_try1      0.00
+# SATVI_try1    0.00
+
+# THE RESULT- WITHOUT DATA LAB
+# Overall
+# ELEV        100.00
+# CH_10yr      86.84
+# VDEPTH       77.12
+# LST_try1     43.28
+# NDRE_try1    31.21
+# NIR_try1     18.52
+# SWIR1_try1   17.56
+# FI_try1       0.00
+# EVI_try1      0.00
+
+# Train an RRF model and compute variable importance.
+set.seed(100)
+rrfMod <- train(class_Corg ~ ., data=dataclass3, method="RRF")
+rrfImp <- varImp(rrfMod, scale=F)
+rrfImp
+plot(rrfImp, top = 20, main='Variable Importance')
+
+# THE RESULT-WITH DATA LAB
+# RRF variable importance
+# only 20 most important variables shown (out of 24)
+# 
+# Overall
+# Liat         23.75
+# Pasir        19.56
+# ELEV         18.25
+# VDEPTH       18.22
+# CH_10yr      15.46
+# SATVI_try1   14.95
+# pH_H2O        0.00
+# pH_KCl        0.00
+
+# THE RESULT-WITHOUT DATA LAB
+# RRF variable importance
+# Overall
+# ELEV        27.862
+# VDEPTH      25.104
+# CH_10yr     21.934
+# MSMMI_try1  15.058
+# SATVI_try1  13.365
+# LST_try1     6.794
+# EVI_try1     0.000
+
+
+##---------GA CARET VERSION----
+# dataclass1nbr <- DATATRY1CLASS_NBR[c(5:21, 23:30)]
+# summary(dataclass1nbr)
+str(dataclass1)
+# Define control function
+ga_ctrl <- gafsControl(functions = rfGA,  # another option is `caretGA`.
+                       method = "repeatedcv", number =10, 
+                       repeats = 5)
+
+# Genetic Algorithm feature selection
+set.seed(100)
+ga_obj <- gafs(x=dataclass1[, c(1:15, 17:20)], 
+               y=dataclass1$class_Corg, 
+               iters = 3,   # normally much higher (100+)
+               popSize = 50,
+               pcrossover = 0.6,
+               pmutation = 0.001,
+               gafsControl = ga_ctrl)
+
+ga_obj
+
+##---------GA DATA SPEKTRAL-----------
+set.seed(100)
+ga_obj <- gafs(x=train_data[, c(2:11)], 
+               y=train_data$Corg, 
+               iters = 3,
+               popSize = 50,
+               pcrossover = 0.6,
+               pmutation = 0.001,# normally much higher (100+)
+               gafsControl = ga_ctrl)
+
+ga_obj
+print(ga_obj$ga$final)
+##-------GA DATA COVARIATE INDEX-------------
+ga_obj <- gafs(x = subset(train_covdata, select = -SOC), 
+               y=train_covdata$SOC, 
+               iters = 3,
+               popSize = 50,
+               pcrossover = 0.6,
+               pmutation = 0.001,# normally much higher (100+)
+               gafsControl = ga_ctrl)
+
+ga_obj
+print(ga_obj$ga$final)
+
+plot(ga_obj) + theme_bw()
+
+# #HASIL 19 JUNI 2023-ITERASI 5
+# Genetic Algorithm Feature Selection
+# 
+# 109 samples
+# 11 predictors
+# 
+# Maximum generations: 5 
+# Population per generation: 50 
+# Crossover probability: 0.6 
+# Mutation probability: 0.001 
+# Elitism: 0 
+# 
+# Internal performance values: RMSE, Rsquared
+# Subset selection driven to minimize internal RMSE 
+# 
+# External performance values: RMSE, Rsquared, MAE
+# Best iteration chose by minimizing external RMSE 
+# External resampling method: Cross-Validated (10 fold) 
+# 
+# During resampling:
+#   * the top 5 selected variables (out of a possible 11):
+#   B5 (100%), B7 (90%), B6 (80%), B8 (80%), B4 (70%)
+# * on average, 7.2 variables were selected (min = 3, max = 10)
+# 
+# In the final search using the entire training set:
+#   * 10 features selected at iteration 2 including:
+#   B3, B4, B5, B6, B7 ... 
+# * external performance at this iteration is
+# 
+# RMSE    Rsquared         MAE 
+# 2.2831      0.2155      1.9478 
+
+
+# HASIL 19 JUNI 2023- ITERATION 10
+# Genetic Algorithm Feature Selection
+# 
+# 109 samples
+# 11 predictors
+# 
+# Maximum generations: 10 
+# Population per generation: 50 
+# Crossover probability: 0.6 
+# Mutation probability: 0.001 
+# Elitism: 0 
+# 
+# Internal performance values: RMSE, Rsquared
+# Subset selection driven to minimize internal RMSE 
+# 
+# External performance values: RMSE, Rsquared, MAE
+# Best iteration chose by minimizing external RMSE 
+# External resampling method: Cross-Validated (10 fold) 
+# 
+# During resampling:
+#   * the top 5 selected variables (out of a possible 11):
+#   B5 (90%), B7 (90%), B8 (90%), B6 (70%), B8A (70%)
+# * on average, 6.1 variables were selected (min = 4, max = 8)
+# 
+# In the final search using the entire training set:
+#   * 10 features selected at iteration 1 including:
+#   B2, B3, B5, B6, B7 ... 
+# * external performance at this iteration is
+# 
+# RMSE    Rsquared         MAE 
+# 2.2211      0.1925      1.8221 
+
+# THE RESULT FROM DATA SPECTRAL TRAIN-17 Juni
+# Genetic Algorithm Feature Selection
+# 
+# 109 samples
+# 11 predictors
+# 
+# Maximum generations: 3 
+# Population per generation: 50 
+# Crossover probability: 0.6 
+# Mutation probability: 0.001 
+# Elitism: 0 
+# 
+# Internal performance values: RMSE, Rsquared
+# Subset selection driven to minimize internal RMSE 
+# 
+# External performance values: RMSE, Rsquared, MAE
+# Best iteration chose by minimizing external RMSE 
+# External resampling method: Cross-Validated (10 fold) 
+# 
+# During resampling:
+#   * the top 5 selected variables (out of a possible 11):
+#   B5 (80%), B7 (80%), B8 (70%), B8A (70%), LC (60%)
+# * on average, 6 variables were selected (min = 1, max = 9)
+# 
+# In the final search using the entire training set:
+#   * 4 features selected at iteration 3 including:
+#   B4, B5, B6, B7  
+# * external performance at this iteration is
+# 
+# RMSE    Rsquared         MAE 
+# 2.4099      0.1546      1.9881 
+
+
+
+# THE RESULT
+# Genetic Algorithm Feature Selection
+# 
+# 146 samples
+# 24 predictors
+# 
+# Maximum generations: 3 
+# Population per generation: 50 
+# Crossover probability: 0.8 
+# Mutation probability: 0.1 
+# Elitism: 0 
+# 
+# Internal performance values: RMSE, Rsquared
+# Subset selection driven to minimize internal RMSE 
+# 
+# External performance values: RMSE, Rsquared, MAE
+# Best iteration chose by minimizing external RMSE 
+# External resampling method: Cross-Validated (10 fold) 
+# 
+# During resampling:
+#   * the top 5 selected variables (out of a possible 24):
+#   ELEV (100%), Pasir (100%), CH_10yr (90%), SLOPE (90%), VDEPTH (90%)
+# * on average, 14.3 variables were selected (min = 7, max = 21)
+# 
+# In the final search using the entire training set:
+#   * 4 features selected at iteration 1 including:
+#   CH_10yr, Pasir, ELEV, SLOPE  
+# * external performance at this iteration is
+# 
+# RMSE    Rsquared         MAE 
+# 0.8802      0.5588      0.7089 
+
+# HASIL YANG SPEKTRAL
+# Genetic Algorithm Feature Selection
+# 
+# 146 samples
+# 11 predictors
+# 
+# Maximum generations: 3 
+# Population per generation: 50 
+# Crossover probability: 0.8 
+# Mutation probability: 0.1 
+# Elitism: 0 
+# 
+# Internal performance values: RMSE, Rsquared
+# Subset selection driven to minimize internal RMSE 
+# 
+# External performance values: RMSE, Rsquared, MAE
+# Best iteration chose by minimizing external RMSE 
+# External resampling method: Cross-Validated (10 fold) 
+# 
+# During resampling:
+#   * the top 5 selected variables (out of a possible 11):
+#   B6 (90%), B7 (70%), B8 (70%), B5 (60%), B4 (40%)
+# * on average, 4.9 variables were selected (min = 3, max = 7)
+# 
+# In the final search using the entire training set:
+#   * 6 features selected at iteration 2 including:
+#   B5, B6, B7, B8, B8A ... 
+# * external performance at this iteration is
+# 
+# RMSE    Rsquared         MAE 
+# 2.2919      0.2205      1.9231 
+
+# VERSION GA 2 with level class c-organic--
+data1_index<-createDataPartition(dataclass1$class_Corg, p=0.7, list=FALSE)
+data1_train<-dataclass1[data1_index, ]
+data1_test<-dataclass1[-data1_index, ]
+library(dplyr)
+unique(dataclass1$class_Corg)
+ga_ctrl<-gafsControl(functions = rfGA, # Assess fitness with RF
+                     method = "cv",    # 10 fold cross validation
+                     genParallel = TRUE, # Use parallel programming
+                     allowParallel = TRUE)
+lev<-c("SR", "R",  "S",  "T", "ST") # Set the levels
+
+set.seed(27)
+model<-gafs(x=data1_train[, c(1:15, 17:20)], y=data1_train$class_Corg,
+            iters = 200,   # generations of algorithm
+            popSize = 50,  # population size for each generation
+            #pmutation=0.001, #mutation probability
+            levels=lev,
+            gafsControl = ga_ctrl)
+             
+plot(model) # Plot mean fitness (AUC) by generation
+model$ga$final
+model$optVariables
+model$times
+model
+
+# THE RESULT-WITH DATA LAB
+# Genetic Algorithm Feature Selection
+# 
+# 105 samples
+# 24 predictors
+# 5 classes: 'R', 'S', 'SR', 'ST', 'T' 
+# 
+# Maximum generations: 200 
+# Population per generation: 50 
+# Crossover probability: 0.8 
+# Mutation probability: 0.1 
+# Elitism: 0 
+# 
+# Internal performance values: Accuracy, Kappa
+# Subset selection driven to maximize internal Accuracy 
+# 
+# External performance values: Accuracy, Kappa
+# Best iteration chose by maximizing external Accuracy 
+# External resampling method: Cross-Validated (10 fold) 
+# 
+# During resampling:
+#   * the top 5 selected variables (out of a possible 24):
+#   Pasir (100%), Liat (90%), FI_try1 (60%), IOR_try1 (50%), NDRE_try1 (40%)
+# * on average, 6.9 variables were selected (min = 4, max = 10)
+# 
+# In the final search using the entire training set:
+#   * 7 features selected at iteration 5 including:
+#   CH_10yr, RED_try1, pH_H2O, Pasir, Liat ... 
+# * external performance at this iteration is
+# 
+# Accuracy       Kappa 
+# 0.4957      0.3250 
+
+
+#THE RESULT-WITHOUT DATA LAB
+# > model
+# 
+# Genetic Algorithm Feature Selection
+# 
+# 105 samples
+# 19 predictors
+# 5 classes: 'R', 'S', 'SR', 'ST', 'T' 
+# 
+# Maximum generations: 200 
+# Population per generation: 50 
+# Crossover probability: 0.8 
+# Mutation probability: 0.1 
+# Elitism: 0 
+# 
+# Internal performance values: Accuracy, Kappa
+# Subset selection driven to maximize internal Accuracy 
+# 
+# External performance values: Accuracy, Kappa
+# Best iteration chose by maximizing external Accuracy 
+# External resampling method: Cross-Validated (10 fold) 
+# 
+# During resampling:
+#   * the top 5 selected variables (out of a possible 19):
+#   FI_try1 (100%), CH_10yr (90%), VDEPTH (90%), FMR_try1 (70%), IOR_try1 (50%)
+# * on average, 6.1 variables were selected (min = 4, max = 9)
+# 
+# In the final search using the entire training set:
+#   * 4 features selected at iteration 173 including:
+#   FI_try1, FMR_try1, CH_10yr, VDEPTH  
+# * external performance at this iteration is
+# 
+# Accuracy       Kappa 
+# 0.4734      0.2983 
+
+
+
+#THE RESULT with  iters 10, percobaan dengan iters =200 dan popsize 50 setelah 1 jam blm selesai
+# Genetic Algorithm Feature Selection
+# 
+# 105 samples
+# 24 predictors
+# 5 classes: 'R', 'S', 'SR', 'ST', 'T' 
+# 
+# Maximum generations: 10 
+# Population per generation: 5 
+# Crossover probability: 0.8 
+# Mutation probability: 0.1 
+# Elitism: 0 
+# 
+# Internal performance values: Accuracy, Kappa
+# Subset selection driven to maximize internal Accuracy 
+# 
+# External performance values: Accuracy, Kappa
+# Best iteration chose by maximizing external Accuracy 
+# External resampling method: Cross-Validated (10 fold) 
+# 
+# During resampling:
+#   * the top 5 selected variables (out of a possible 24):
+#   Pasir (90%), Debu (70%), Liat (70%), CMR_try1 (60%), FMR_try1 (60%)
+# * on average, 12.4 variables were selected (min = 8, max = 19)
+# 
+# In the final search using the entire training set:
+#   * 13 features selected at iteration 4 including:
+#   NDVI_try1, SATVI_try1, MSMMI_try1, LST_try1, RED_try1 ... 
+# * external performance at this iteration is
+# 
+# Accuracy       Kappa 
+# 0.5232      0.3573 
+
+##--------Recursive Feature Elimination (RFE)--------
+options(warn=-1)
+
+subsets <- c(1:5, 10, 15, 18)
+
+ctrl <- rfeControl(functions = rfFuncs,
+                   method = "cv",
+                   repeats = 5,
+                   verbose = FALSE)
+
+lmProfile <- rfe(x=dataclass1[, c(1:15, 17:20)], y=dataclass1$class_Corg,
+                 sizes = subsets,
+                 rfeControl = ctrl)
+
+lmProfile
+
+# THE RESULT : The top 5 variables (out of 5): Pasir, ELEV, Liat, VDEPTH, CH_10yr
+
+# USING DATA SPECTRAL - 17 Juni
+options(warn=-1)
+
+subsets <- c(2, 4, 10, 11)
+
+ctrl <- rfeControl(functions = rfFuncs,
+                   method = "repeatedcv",
+                   repeats = 5,
+                   verbose = FALSE)
+str(nl.spectral)
+#--DATA SPECTRAL 
+lmProfile <- rfe(x=train_data[, c(2:11)], y=train_data$Corg,
+                 sizes = subsets,
+                 rfeControl = ctrl)
+
+lmProfile
+
+
+#--DATA COVARIATE INDEX DAN LAB-------
+lmProfile <- rfe(x = subset(train_covdata, select = -SOC), 
+                 y=train_covdata$SOC,
+                 sizes = subsets,
+                 rfeControl = ctrl)
+
+lmProfile
+predictors(lmProfile)
+
+library(ggplot2)
+ggplot(data = lmProfile, metric = "RMSE") + theme_bw()
+varimp_data <- data.frame(feature = row.names(varImp(lmProfile))[1:10],
+                          importance = varImp(lmProfile)[1:2, 1])
+
+ggplot(data = varimp_data, 
+       aes(x = reorder(feature, -importance), y = importance, fill = feature)) +
+  geom_bar(stat="identity") + labs(x = "Features", y = "Variable Importance") + 
+  geom_text(aes(label = round(importance, 2)), vjust=1.6, color="white", size=4) + 
+  theme_bw() + theme(legend.position = "none")
+
+
+# HASIL RFE SPEKTRAL
+# HASIL 19 JUNI 2023
+# Recursive feature selection
+# 
+# Outer resampling method: Cross-Validated (10 fold, repeated 5 times) 
+# 
+# Resampling performance over subset size:
+#   
+#   Variables  RMSE Rsquared   MAE RMSESD RsquaredSD  MAESD Selected
+# 2 2.636   0.1020 2.112 0.4191     0.1533 0.3480         
+# 4 2.486   0.1295 2.021 0.3243     0.1363 0.3023         
+# 10 2.230   0.2497 1.836 0.3513     0.1821 0.3174         
+# 11 2.192   0.2682 1.800 0.3332     0.1810 0.2991        *
+#   
+#   The top 5 variables (out of 11):
+#   B2, B4, B3, LC, B7
+
+
+# Recursive feature selection
+# 
+# Outer resampling method: Cross-Validated (10 fold, repeated 5 times) 
+# 
+# Resampling performance over subset size:
+#   
+#   Variables  RMSE Rsquared   MAE RMSESD RsquaredSD  MAESD Selected
+# 2 2.518  0.07892 2.073 0.3494     0.1047 0.3133         
+# 4 2.387  0.12109 1.977 0.3307     0.1345 0.3176         
+# 10 2.271  0.16703 1.868 0.3194     0.1352 0.3078         
+# 11 2.251  0.17770 1.855 0.3193     0.1435 0.2999        *
+#   
+#   The top 5 variables (out of 11):
+#   B5, B2, B4, B3, B8A
+
+# # HASIL DARI SPECTRAL PERCOBAAN KE 2-17 jUNI 2023
+# Recursive feature selection
+# 
+# Outer resampling method: Cross-Validated (10 fold, repeated 5 times) 
+# 
+# Resampling performance over subset size:
+#   
+# Variables  RMSE   Rsquared   MAE RMSESD RsquaredSD  MAESD Selected
+# 2           2.636   0.1020 2.112 0.4191     0.1533 0.3480         
+# 4           2.486   0.1295 2.021 0.3243     0.1363 0.3023         
+# 10          2.230   0.2497 1.836 0.3513     0.1821 0.3174         
+# 11          2.192   0.2682 1.800 0.3332     0.1810 0.2991        *
+#   
+#   The top 5 variables (out of 11):
+#   B2, B4, B3, LC, B7
+
