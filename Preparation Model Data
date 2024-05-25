@@ -1,0 +1,240 @@
+##------------------PREPARING DATA FOR MODEL---------------------
+setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+library(dplyr)
+library(stats)
+library(tidyverse)
+library(sf)
+library(rgdal)
+library(terra)
+
+#-------------stacking raster covariate index and topography-----------------
+covstack <- stack (r.ndvi, r.ndre, r.evi,
+                   r.rbri, r.rgri, r.sti, r.smi,
+                   r.lst, r.chrev, 
+                   r.valey, r.elev, r.slope, r.aspect)
+names(covstack)
+
+#write the raster stack
+covstack.exp1 <- rast(covstack)
+names(covstack.exp1)<-c("NDVI","NDRE" , "EVI" ,"RBRI" ,"RGRI", "STI", "SMI",
+                         "LST"  ,  "CHrev"  ,    
+                         "VDEPTH", "ELEV"  ,  "SLOPE", "ASPECT")
+covstack.exp <- terra::writeRaster(covstack.exp1, 
+                         filename=file.path("F:/DATA RISET/TEMP DATA R", "covstack_datamod1.tif"), 
+                         overwrite=TRUE)
+
+#raster after overwrite with extent AOI paten 
+# covstack1 <- terra::rast("covstack_exp1.tif")
+covstack1 <- raster::stack("covstack_datamod1.tif")
+head(covstack1)
+
+##--------------------------------stacking spectral raster---------------------
+spectral_stack <- stack (r.blue, r.green, r.red, r.re1, r.re3)
+names(spectral_stack)
+
+#write the raster stack
+spectral_stack.exp1 <- rast(spectral_stack)
+names(spectral_stack.exp1)<-c("B2" , "B3"  ,"B4" , "B5" , "B7")
+spectralstack.exp <- terra::writeRaster(spectral_stack.exp1, 
+                                   filename=file.path("F:/DATA RISET/TEMP DATA R", "spectralstack_datamod1.tif"), 
+                                   overwrite=TRUE)
+summary(spectralstack.exp)
+#raster after overwrite with extent AOI paten 
+# spectral_stack1 <- terra::rast("spectralstack_datamod1.tif")
+spectral_stack1 <- raster::stack("spectralstack_datamod1.tif") #bisa juga pake raster untuk masukinnya
+head(spectral_stack1)
+summary(spectral_stack1)
+
+#---------------------------stacking raster categorical---------------------
+##--------------ENCODING DATA CATEGORICAL RASTER-----------
+library(raster)
+r.enc.subgroup <-layerize (r.subgroup)
+names(r.enc.subgroup)<-c("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10")
+r.enc.subgroup
+
+
+r.enc.greatgroup <-layerize (r.greatgroup)
+names(r.enc.greatgroup)<-c("g1", "g2", "g3", "g4", "g5", "g6")
+r.enc.greatgroup
+
+r.enc.ordo <-layerize (r.ordo)
+names(r.enc.ordo)<-c("or1", "or2", "or3", "or4")
+r.enc.ordo
+
+r.enc.geomap <-layerize (r.geomap)
+r.enc.geomap
+names(r.enc.geomap)<-c("Qc","Ql","Qvu", "Qyd", "Qyg", "Qyl", "Qyt", "Qyu", "Tmb")
+
+r.enc.lulc <-layerize (r.lulc)
+r.enc.lulc
+# KODE
+# 0 = builtsup
+# 1 = cropland
+# 2 = plantation
+# 3 = bareland
+# 4 = paddy
+# 5 = shrubland
+# 6 = forest
+names(r.enc.lulc)<-c("builtsup","cropland","plantation", "bareland", "paddyfield", "shrubland", "forest")
+
+#stacking
+stack.categ <- stack (r.enc.subgroup, r.enc.greatgroup, r.enc.geomap, r.enc.lulc) 
+stack.categ
+names(stack.categ)
+
+#write the raster stack
+stack.categ.exp1 <- rast(stack.categ)
+names(stack.categ.exp1)<-c("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10",
+                           "g1", "g2", "g3", "g4", "g5", "g6",
+                           "Qc","Ql","Qvu", "Qyd", "Qyg", "Qyl", "Qyt", "Qyu", "Tmb",
+                           "builtsup","cropland","plantation","bareland","paddyfield","shrubland","forest")
+stack.categ.exp <- terra::writeRaster(stack.categ.exp1, 
+                                        filename=file.path("F:/DATA RISET/TEMP DATA R", "categstack_datamod.tif"), 
+                                        overwrite=TRUE)
+summary(stack.categ.exp)
+#raster after overwrite with extent AOI paten 
+# stack.categ1 <- terra::rast("categstack_exp1.tif") # for input we can use terra
+stack.categ1 <- raster::stack("categstack_datamod.tif") #bisa juga pake raster untuk masukinnya
+head(stack.categ1)
+
+
+# ##---------CLIP RASTER CATEGORICAL WITH SHP CIKAPUNDUNG AND WRITE THE RASTER
+# stack.categ.clip <-crop(stack.categ, extent(shpcika))
+# plot(stack.categ.clip$g1)
+# stack.categ.clip
+
+#-------------STACKING RASTER INDEX, TOPOGRAPHY, AND CATEGORICAL--------
+#sudah coba pake raster stack yang di clip sebelumnya, tp gagal karena different extent
+#stacking gabisa pake terra
+stack.cov2 <- raster::stack(spectral_stack1, covstack1, stack.categ1) 
+plot(shpcika)
+names(stack.cov2)
+
+r.cov.stack<- raster::crop(stack.cov2, extent(shpcika))
+r.cov.stack
+plot(r.cov.stack$NDVI)
+names(r.cov.stack)
+
+#WRITE RASTER AFTER STACKING AND CLIPPING by SHP CIKAPUNDUNG
+#write the raster stack
+r.cov.stack.exp1 <- rast(r.cov.stack)
+names(r.cov.stack.exp1)<-c("B2","B3" ,"B4" ,"B5","B7",
+                           "NDVI","NDRE", "EVI" ,"RBRI" ,"RGRI", "STI", "SMI",
+                           "LST"  ,  "CHrev",    
+                           "VDEPTH", "ELEV"  ,"SLOPE" , "ASPECT",
+                           "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10",
+                           "g1", "g2", "g3", "g4", "g5", "g6",
+                           "Qc","Ql","Qvu", "Qyd", "Qyg", "Qyl", "Qyt", "Qyu", "Tmb",
+                           "builtsup","cropland","plantation","bareland","paddyfield","shrubland","forest")
+r.cov.stack.exp <- terra::writeRaster(r.cov.stack.exp1, 
+                                      filename=file.path("F:/DATA RISET/TEMP DATA R", "dataarc.tif"), 
+                                      overwrite=TRUE)
+summary(r.cov.stack.exp)
+#raster after overwrite with extent AOI paten 
+# stack.categ1 <- terra::rast("categstack_exp1.tif") # for input we can use terra
+r.cov.stack1 <- raster::stack("datamod2.tif") #bisa juga pake raster untuk masukinnya
+head(r.cov.stack1)
+plot(r.cov.stack1$NDVI)
+names(r.cov.stack1)
+
+##-------------------EXTRACT DATA MODEL-------------------------------
+##data model 1
+datacov.model.1 <- raster::extract(r.cov.stack1, shpDATALAB, sp = 1,
+                                 method = "simple")
+datacov.model.1<- as.data.frame(datacov.model.1)
+str(datacov.model.1)
+data.mod1.rev <-datacov.model.1[c(6,11:60)]
+str(data.mod1.rev)
+
+##data model 2
+datacov.model <- raster::extract(r.cov.stack1, shpDATALAB, sp = 1,
+                                 method = "simple")
+datacov.model<- as.data.frame(datacov.model)
+str(datacov.model)
+data.mod2.rev <-datacov.model[c(6,11:57)]
+str(data.mod2.rev)
+
+
+##---------------------SELECTING DATA FOR TEST PERFOME MODEL---------------
+data.mod1 <-DSM_DATATRY3_SELECTED[c(2:24)]
+data.mod1 <- as.data.frame(data.mod1)
+# DSM_DATATRY3rev <- DSM_DATATRY3rev %>% rename("NDVI" ="NDVI_try3",
+#                                               "NDRE" = "NDRE_try3",
+#                                               "SATVI" ="SATVI_try3",
+#                                               "EVI"="EVI_try3",
+#                                               "NBR2"="NBR2_try3",
+#                                               "STI"="CMR_try3",
+#                                               "MSMMI"="MSMMI_try3",
+#                                               "MSI"="FMR_try3",
+#                                               "RBRI"="IOR_try3",
+#                                               "RGRI"="FI_try3",
+#                                               "Elevation"="ELEV",
+#                                               "Slope"= "SLOPE",
+#                                               "Aspect"= "ASPECT",
+#                                               "ValleyDepth"= "VDEPTH",
+#                                               "subgroup"= "s_group",
+#                                               "greatgroup"= "g_group")
+data.mod2 <-DSM_DATATRY3rev[c(12, 14:32)]
+data.mod2<- as.data.frame(data.mod2)
+
+#dont forget to convert class into factor
+data.mod1$subgroup <- factor(data.mod1$subgroup)
+data.mod1$greatgroup <- factor(data.mod1$greatgroup)
+data.mod1$Landcover <- factor(data.mod1$Landcover)
+data.mod1$Litologi <- factor(data.mod1$Litologi)
+
+data.mod2$subgroup <- factor(data.mod2$subgroup)
+data.mod2$greatgroup <- factor(data.mod2$greatgroup)
+data.mod2$LC <- factor(data.mod2$LC)
+data.mod2$GEOLOGY <- factor(data.mod2$GEOLOGY)
+
+data.mod2 <- data.mod2 %>% rename("Landcover" ="LC",
+                                  "Litologi"="GEOLOGY")
+                                             
+str(data.mod2)
+
+#for SVR there no capable with categorical data so we have to encoding the class
+dummy.mod1 <-dummyVars(" ~ .", data = data.mod1)
+ENCO.data.mod1 <- data.frame(predict(dummy.mod1, newdata = data.mod1))
+
+dummy.mod2 <-dummyVars(" ~ .", data = data.mod2)
+ENCO.data.mod2 <- data.frame(predict(dummy.mod2, newdata = data.mod2))
+
+str(ENCO.data.mod2)
+scale.ENCO.datamod1 <-ENCO.data.mod1
+scale.ENCO.datamod1[c(2:46)] <-scale(scale.ENCO.datamod1[c(2:46)], scale=TRUE)
+str(scale.ENCO.datamod1)
+
+
+##encoding categorical data in datamod3 for article ALG
+str(DSM_FIN)
+data.mod3<- DSM_FIN[c(1,3,5:7,15,20)]
+dummy.mod3 <-dummyVars(" ~ .", data = data.mod3)
+data.mod3.rev <- data.frame(predict(dummy.mod3, newdata = data.mod3))
+str(data.mod3.rev)
+
+data.mod3.rev <- data.mod3.rev %>% rename("s2" ="s_groupGawir",
+                                          "s4" = "s_groupOxyaquic.Dystrudepts",
+                                          "s5" = "s_groupThaptic.Hapludands",
+                                          "s6" = "s_groupTypic.Dystrudepts",
+                                          "s7" = "s_groupTypic.Endoaquepts",
+                                          "s8" = "s_groupTypic.Eutrudepts",
+                                          "s9" = "s_groupTypic.Hapludands",
+                                          "s10" = "s_groupTypic.Udipsamments",
+                                          "Qc" = "GEOLOGYQc",
+                                          "Ql" = "GEOLOGYQl",
+                                          "Qvu" = "GEOLOGYQvu",
+                                          "Qyd" = "GEOLOGYQyd",
+                                          "Qyl" = "GEOLOGYQyl",
+                                          "Qyt" = "GEOLOGYQyt",
+                                          "Qyu" = "GEOLOGYQyu",
+                                          "bareland" = "LCBare.Fallow",
+                                          "cropland" = "LCCropland",
+                                          "forest" = "LCForest",
+                                          "paddyfield" = "LCPaddy.Field",
+                                          "shrubland" = "LCShrubland",
+                                          "plantation" = "LCPlantation",
+                                           "CHrev"= "CH"
+                                          )
+
+
