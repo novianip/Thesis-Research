@@ -1,0 +1,878 @@
+##---MODELING----
+## LIBRARY THAT WHAT WE NEED
+library(dplyr)
+library(stats)
+library(tidyverse)
+library(sf)
+library(rgdal)
+library(sp)
+library(raster)
+
+##------PREPARING DATA RASTER AND DATAFRAME IN RF AND SVR------------
+##--DATAFRAME--
+#data.mod1
+str(data.mod1.rev)
+data.mod1.rev <- subset(data.mod1.rev, select = -c(s1, s3, Qyg, Tmb, builtsup))
+
+#data.mod2
+str(data.mod2.rev)
+data.mod2.rev <- subset(data.mod2.rev, select = -c(s1, s3, Qyg, Tmb, builtsup))
+
+#data.mod3--- for data article ALG
+str(data.mod3.rev) #from tab Preparation Data Model... DATA_FIN
+
+
+##--RASTER #this raster for RF and SVR
+#data.mod1
+r.datamod1 <- raster::stack("datamod1.tif")
+names(r.datamod1)
+r.datamod1 <-dropLayer(r.datamod1 ,c("s1", "s3", "Qyg", "Tmb", "builtsup")) 
+
+#data.mod2
+r.datamod2 <- raster::stack("datamod2.tif")
+names(r.datamod2)
+r.datamod2 <-dropLayer(r.datamod2 ,c("s1", "s3", "Qyg", "Tmb", "builtsup")) 
+
+#data.mod3 untuk data artikel ALG
+r.datamod3 <- raster::stack("datamod2.tif")
+names(r.datamod3)
+r.datamod3 <-dropLayer(r.datamod2 ,c("NDRE" ,"SATVI" , "EVI" ,"NBR2" ,"RBRI" ,"RGRI","MSI",
+                                     "STI","SMI" ,"LST", "VDEPTH", "SLOPE",
+                                     "g1", "g2","g3","g4","g5","g6",
+                                    "s1", "s3", "Qyg", "Tmb", "builtsup")) 
+
+
+##NOTE: Sebelum lanjut ke sini.. kita ke tab "Custom Parameter Tuning" untuk dapet tuning parameter utk RF dan SVR
+##setelah dapet parameter tuning RF dan SVR.. yok lanjut nopp
+
+
+##------MODELING USING RANDOM FOREST WITH CONTINUOUS DATA-----
+library(caret)
+library(randomForest)
+##I decided to set different name model for backup on visulization RF
+##--------------------DATA MODEL 1--------------
+set.seed(30)
+training1 <- sample(nrow(data.mod1.rev), 0.75 * nrow(data.mod1.rev))
+datatrain.mod1 <- data.mod1.rev[training1, ]
+datatest.mod1<-data.mod1.rev[-training1, ]
+sd(datatest.mod1$Corg)
+# fit the model
+Mod.RF.1 <- randomForest(Corg ~ .,
+                       data = data.mod1.rev[training1, ],
+                       importance = TRUE, 
+                       ntree = 1000,
+                       mtry = 10,
+                       nodesize=5)
+Mod.RF.1 = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod1.rda")
+# rf_grid <- expand.grid(mtry = 10)       # Minimum size of terminal nodes 
+# 
+# control <- trainControl(method="repeatedcv", 
+#                         repeats=5,
+#                         number=10,
+#                         verboseIter = FALSE,
+#                         allowParallel = TRUE)
+#                         # search="grid",
+#                         # allowParallel = FALSE)
+# 
+# Mod.RF.1.cv <- train(x = subset(data.mod1.rev, select = -Corg),
+#                      y = data.mod1.rev$Corg, 
+#                      method=customRF, 
+#                      metric="Rsquared", 
+#                      tuneGrid=grid, 
+#                      trControl=control)
+# Mod.RF.1.cv
+# Modcv.RF.1<-Mod.RF.1.cv$finalModel 
+# mean(Mod.RF.1.cv[["finalModel"]][["rsq"]])
+# mean(Modcv.RF.1$mse)
+# mean(Modcv.RF.1$rsq)
+# mse <- mean(Modcv.RF.1$mse)
+# r2 <-mean(Modcv.RF.1$rsq)
+# rmse <- mean(sqrt(mse))
+
+
+##------------------CALIBRATION RF MOD 1-------------
+# Step 2: Calculate RMSE
+rmse.rf.C <- sqrt(mean((Mod.RF.1$predicted - datatrain.mod1$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.C <- mean(datatrain.mod1$Corg)
+r2.rf.C <- 1 - sum((datatrain.mod1$Corg - Mod.RF.1$predicted)^2) / sum((datatrain.mod1$Corg - mean_actual.C)^2)
+#mse
+mse.rf.C <- mean((datatrain.mod1$Corg - Mod.RF.1$predicted)^2)
+#mae
+mae.rf.C <- mean(abs(datatrain.mod1$Corg - Mod.RF.1$predicted))
+# Print the results
+cat("RMSE MODEL.C:", rmse.rf.C, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.rf.C, "\n")
+cat("MSEMODEL.C:", mse.rf.C, "\n")
+cat("MAE MODEL.C:", mae.rf.C, "\n")
+##-----------------VALIDATION RF MOD 1-------------
+Modpred.RF.V.1 <- predict(Mod.RF.1, newdata = data.mod1.rev[-training1, ])
+
+# Step 2: Calculate RMSE
+rmse.rf.V <- sqrt(mean((Modpred.RF.V.1 - datatest.mod1$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.V <- mean(datatest.mod1$Corg)
+r2.rf.V <- 1 - sum((datatest.mod1$Corg - Modpred.RF.V.1)^2) / sum((datatest.mod1$Corg - mean_actual.V)^2)
+#mse
+mse.rf.V <- mean((datatest.mod1$Corg - Modpred.RF.V.1)^2)
+#mae
+mae.rf.V <- mean(abs(datatest.mod1$Corg - Modpred.RF.V.1))
+# Print the results
+cat("RMSE MODEL.C:", rmse.rf.V, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.rf.V, "\n")
+cat("MSEMODEL.C:", mse.rf.V, "\n")
+cat("MAE MODEL.C:", mae.rf.V, "\n")
+
+
+
+
+# # saving the model
+saveRDS(Mod.RF.1,
+        file = "F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod1_29JULI.rda")
+# # call model
+# Mod.RF.dummy = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod2.rda")
+
+Mod.RF.1
+plot(Mod.RF.1)
+varImpPlot(Mod.RF.1)
+which.min(Mod.RF.1$mse)
+print(Mod.RF.1$importance)
+
+## train test with k-fold
+library(devtools)
+library(ithir)
+# Internal validation
+Modpred.RF.C.1 <- predict(Mod.RF.1, newdata = data.mod1.rev[training1, ])
+goof(observed = data.mod1.rev$Corg[training1], predicted = Modpred.RF.C.1)
+
+# External validation
+Modpred.RF.V.1 <- predict(Mod.RF.1, newdata = data.mod1.rev[-training1, ])
+goof(observed = data.mod1.rev$Corg[-training1], predicted = Modpred.RF.V.1)
+
+##----------------------------Saving model 1 RF ----------------
+setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+# saving the model
+saveRDS(Mod.RF.1, 
+        file = "F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod1.rda")
+# call model
+Mod.RF.dummy = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod1.rda")
+Mod.RF.dummy
+##---------------DATA MODEL 2--------------------
+set.seed(29)
+training <- sample(nrow(data.mod2.rev), 0.75 * nrow(data.mod2.rev))
+datatrain.mod2 <- data.mod2.rev[training, ]
+datatest.mod2<-data.mod2.rev[-training, ]
+# fit the model
+# Mod.RF <- randomForest(Corg ~ .,
+#                        data = data.mod2.rev[training, ],
+#                        importance = TRUE, 
+#                        ntree = 1000,
+#                        mtry = 10,
+#                        nodesize=5)
+Mod.RF = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod2.rda")
+Mod.RF
+plot(Mod.RF)
+varImpPlot(Mod.RF)
+which.min(Mod.RF$mse)
+print(Mod.RF$importance)
+
+##------------------CALIBRATION RF MOD 2-------------
+# Step 2: Calculate RMSE
+rmse.rf.C <- sqrt(mean((Mod.RF$predicted - datatrain.mod2$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.C <- mean(datatrain.mod2$Corg)
+r2.rf.C <- 1 - sum((datatrain.mod2$Corg - Mod.RF$predicted)^2) / sum((datatrain.mod2$Corg - mean_actual.C)^2)
+#mse
+mse.rf.C <- mean((datatrain.mod2$Corg - Mod.RF$predicted)^2)
+#mae
+mae.rf.C <- mean(abs(datatrain.mod2$Corg - Mod.RF$predicted))
+# Print the results
+cat("RMSE MODEL.C:", rmse.rf.C, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.rf.C, "\n")
+cat("MSEMODEL.C:", mse.rf.C, "\n")
+cat("MAE MODEL.C:", mae.rf.C, "\n")
+##-----------------VALIDATION RF MOD 2-------------
+Modpred.RF.V <- predict(Mod.RF, newdata = data.mod2.rev[-training, ])
+
+# Step 2: Calculate RMSE
+rmse.rf.V <- sqrt(mean((Modpred.RF.V - datatest.mod2$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.V <- mean(datatest.mod2$Corg)
+r2.rf.V <- 1 - sum((datatest.mod2$Corg - Modpred.RF.V)^2) / sum((datatest.mod2$Corg - mean_actual.V)^2)
+#mse
+mse.rf.V <- mean((datatest.mod2$Corg - Modpred.RF.V)^2)
+#mae
+mae.rf.V <- mean(abs(datatest.mod2$Corg - Modpred.RF.V))
+# Print the results
+cat("RMSE MODEL.C:", rmse.rf.V, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.rf.V, "\n")
+cat("MSEMODEL.C:", mse.rf.V, "\n")
+cat("MAE MODEL.C:", mae.rf.V, "\n")
+
+
+#install.packages("devtools") 
+library(devtools)
+#install_bitbucket("brendo1001/ithir/pkg")
+library(ithir)
+# Internal validation
+Modpred.RF.C <- predict(Mod.RF, newdata = data.mod2.rev[training, ])
+goof(observed = data.mod2.rev$Corg[training], predicted = Modpred.RF.C)
+
+# External validation
+Modpred.RF.V <- predict(Mod.RF, newdata = data.mod2.rev[-training, ])
+goof(observed = data.mod2.rev$Corg[-training], predicted = Modpred.RF.V)
+##----FINISH DATA MODEL 2-----------------
+
+##-------Predict RF on raster and save it----------------
+# setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+# map.RF.r1 <- predict(r.datamod1, Mod.RF.1, "SOC_RF_datamod1rep.tif",
+#                      format = "GTiff", datatype = "FLT4S", overwrite = TRUE)
+#WE WILL TRY LATER (8 APRIL 2023) CAUSE TAKES A TIME
+# FL4S indicates that a 4 byte, signed floating point values are to be written to file.
+plot(map.RF.r1,
+     main = "Random Forest model predicted 0-5cm log SOC")
+
+##----------------------------Saving model 2 RF ----------------
+setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+# saving the model
+saveRDS(Mod.RF, 
+        file = "F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod2.rda")
+# call model
+Mod.RF.dummy = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod2.rda")
+Mod.RF.dummy
+Mod.RF
+
+##---------------DATA MODEL 3--------------------
+set.seed(29)
+training <- sample(nrow(data.mod3.rev), 0.75 * nrow(data.mod3.rev))
+datatrain.mod3 <- data.mod3.rev[training, ]
+datatest.mod3<-data.mod3.rev[-training, ]
+# fit the model
+Mod.RF <- randomForest(SOC ~ .,
+                       data = data.mod3.rev[training, ],
+                       importance = TRUE,
+                       ntree = 1000,
+                       mtry = 10,
+                       nodesize=5)
+# Mod.RF = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod2.rda")
+Mod.RF
+plot(Mod.RF)
+varImpPlot(Mod.RF)
+which.min(Mod.RF$mse)
+print(Mod.RF$importance)
+
+##------------------CALIBRATION RF MOD 3-------------
+# Step 2: Calculate RMSE
+rmse.rf.C <- sqrt(mean((Mod.RF$predicted - datatrain.mod3$SOC)^2))
+# Step 3: Calculate R2
+mean_actual.C <- mean(datatrain.mod3$SOC)
+r2.rf.C <- 1 - sum((datatrain.mod3$SOC - Mod.RF$predicted)^2) / sum((datatrain.mod3$SOC - mean_actual.C)^2)
+#mse
+mse.rf.C <- mean((datatrain.mod3$SOC - Mod.RF$predicted)^2)
+#mae
+mae.rf.C <- mean(abs(datatrain.mod3$SOC - Mod.RF$predicted))
+# Print the results
+cat("RMSE MODEL.C:", rmse.rf.C, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.rf.C, "\n")
+cat("MSEMODEL.C:", mse.rf.C, "\n")
+cat("MAE MODEL.C:", mae.rf.C, "\n")
+##-----------------VALIDATION RF MOD 3-------------
+Modpred.RF.V <- predict(Mod.RF, newdata = data.mod3.rev[-training, ])
+
+# Step 2: Calculate RMSE
+rmse.rf.V <- sqrt(mean((Modpred.RF.V - datatest.mod3$SOC)^2))
+# Step 3: Calculate R2
+mean_actual.V <- mean(datatest.mod3$SOC)
+r2.rf.V <- 1 - sum((datatest.mod3$SOC - Modpred.RF.V)^2) / sum((datatest.mod3$SOC - mean_actual.V)^2)
+#mse
+mse.rf.V <- mean((datatest.mod3$SOC - Modpred.RF.V)^2)
+#mae
+mae.rf.V <- mean(abs(datatest.mod3$SOC - Modpred.RF.V))
+# Print the results
+cat("RMSE MODEL.C:", rmse.rf.V, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.rf.V, "\n")
+cat("MSEMODEL.C:", mse.rf.V, "\n")
+cat("MAE MODEL.C:", mae.rf.V, "\n")
+
+
+# #install.packages("devtools") 
+# library(devtools)
+# #install_bitbucket("brendo1001/ithir/pkg")
+# library(ithir)
+# # Internal validation
+# Modpred.RF.C <- predict(Mod.RF, newdata = data.mod3.rev[training, ])
+# goof(observed = data.mod3.rev$SOC[training], predicted = Modpred.RF.C)
+# 
+# # External validation
+# Modpred.RF.V <- predict(Mod.RF, newdata = data.mod3.rev[-training, ])
+# goof(observed = data.mod3.rev$SOC[-training], predicted = Modpred.RF.V)
+##----FINISH DATA MODEL 3-----------------
+
+##-------Predict RF on raster and save it----------------
+# setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+# map.RF.r1 <- predict(r.datamod1, Mod.RF.1, "SOC_RF_datamod1rep.tif",
+#                      format = "GTiff", datatype = "FLT4S", overwrite = TRUE)
+#WE WILL TRY LATER (8 APRIL 2023) CAUSE TAKES A TIME
+# FL4S indicates that a 4 byte, signed floating point values are to be written to file.
+plot(map.RF.r1,
+     main = "Random Forest model predicted 0-5cm log SOC")
+
+##----------------------------Saving model 2 RF ----------------
+setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+# saving the model
+saveRDS(Mod.RF, 
+        file = "F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod2.rda")
+# call model
+Mod.RF.dummy = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelRF_datamod2.rda")
+Mod.RF.dummy
+Mod.RF
+
+
+
+
+##------MODELING USING SUPPORT VECTOR REGRESSION WITH CONTINUOUS DATA-----
+library(e1071)
+library(caret)
+##----------------------DATA MODEL 1------------------
+set.seed(50)
+svr.training1 <- sample(nrow(data.mod1.rev), 0.75 * nrow(data.mod1.rev))
+datatrain.mod1 <- data.mod1.rev[svr.training1, ]
+datatest.mod1<-data.mod1.rev[-svr.training1, ]
+
+Mod.SVR.1 = svm(Corg~. ,
+              data =data.mod1.rev[svr.training1, ],
+              cost = 5,
+              epsilon =0.1,
+              gamma=0.01
+)
+
+
+# Mod.SVR.1
+# Mod.SVR.1$coefs
+
+# library(devtools)
+# library(ithir)
+# # Internal validation well known as Calibration
+# Modpred.SVR.C.1 <- predict(Mod.SVR.1, newdata =data.mod1.rev[svr.training1, ])
+# goof(observed = data.mod1.rev$Corg[svr.training1], predicted = Modpred.SVR.C.1)
+# 
+# # External validation
+# Modpred.SVR.V.1 <- predict(Mod.SVR.1, newdata = data.mod1.rev[-svr.training1, ])
+# goof(observed = data.mod1.rev$Corg[-svr.training1], predicted = Modpred.SVR.V.1)
+
+##------------------CALIBRATION SVR MOD 1-------------
+# Step 2: Calculate RMSE
+rmse.svr.C <- sqrt(mean((Mod.SVR.1$fitted - datatrain.mod1$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.C <- mean(datatrain.mod1$Corg)
+r2.svr.C <- 1 - sum((datatrain.mod1$Corg - Mod.SVR.1$fitted)^2) / sum((datatrain.mod1$Corg - mean_actual.C)^2)
+#mse
+mse.svr.C <- mean((datatrain.mod1$Corg - Mod.SVR.1$fitted)^2)
+#mae
+mae.svr.C <- mean(abs(datatrain.mod1$Corg - Mod.SVR.1$fitted))
+# Print the results
+cat("RMSE MODEL.C:", rmse.svr.C, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.svr.C, "\n")
+cat("MSEMODEL.C:", mse.svr.C, "\n")
+cat("MAE MODEL.C:", mae.svr.C, "\n")
+##-----------------VALIDATION RF MOD 1-------------
+Modpred.SVR.V.1 <- predict(Mod.SVR.1, newdata = data.mod1.rev[-svr.training1, ])
+
+# Step 2: Calculate RMSE
+rmse.svr.V <- sqrt(mean((Modpred.SVR.V.1 - datatest.mod1$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.V <- mean(datatest.mod1$Corg)
+r2.svr.V <- 1 - sum((datatest.mod1$Corg - Modpred.SVR.V.1)^2) / sum((datatest.mod1$Corg - mean_actual.V)^2)
+#mse
+mse.svr.V <- mean((datatest.mod1$Corg - Modpred.SVR.V.1)^2)
+#mae
+mae.svr.V <- mean(abs(datatest.mod1$Corg - Modpred.SVR.V.1))
+# Print the results
+cat("RMSE MODEL.C:", rmse.svr.V, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.svr.V, "\n")
+cat("MSEMODEL.C:", mse.svr.V, "\n")
+cat("MAE MODEL.C:", mae.svr.V, "\n")
+
+
+# ##----------------------------Saving model 1 SVR ----------------
+# setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+# # saving the model
+# saveRDS(Mod.SVR.1, 
+#         file = "F:\\DATA RISET\\TEMP DATA R\\ModelSVR_datamod1.rda")
+# # call model
+# Mod.SVR.dummy = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelSVR_datamod1.rda")
+
+##--------------------DATA MODEL 2-------------
+set.seed(50)
+svr.training <- sample(nrow(data.mod2.rev), 0.75 * nrow(data.mod2.rev))
+datatrain.mod2 <- data.mod1.rev[svr.training, ]
+datatest.mod2<-data.mod1.rev[-svr.training, ]
+
+Mod.SVR = svm(Corg~. ,
+                data =data.mod2.rev[svr.training, ],
+                cost = 5,
+                epsilon =0.1,
+                gamma=0.01
+               )
+Mod.SVR
+
+# library(devtools)
+# library(ithir)
+# Internal validation well known as Calibration
+Modpred.SVR.C <- predict(Mod.SVR, newdata =data.mod2.rev[svr.training, ])
+goof(observed = data.mod2.rev$Corg[svr.training], predicted = Modpred.SVR.C)
+
+# External validation
+Modpred.SVR.V <- predict(Mod.SVR, newdata = data.mod2.rev[-svr.training, ])
+goof(observed = data.mod2.rev$Corg[-svr.training], predicted = Modpred.SVR.V)
+
+
+#PLOT actual and predict using training data
+plot(data.mod2.rev$Corg[-svr.training], Modpred.SVR.V, col='blue', pch=16, ylab = "predicted rating NN", xlab = "real rating")
+abline(0,1)
+
+##------------------CALIBRATION SVR MOD 2-------------
+# Step 2: Calculate RMSE
+rmse.svr.C <- sqrt(mean((Mod.SVR$fitted - datatrain.mod2$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.C <- mean(datatrain.mod2$Corg)
+r2.svr.C <- 1 - sum((datatrain.mod2$Corg - Mod.SVR$fitted)^2) / sum((datatrain.mod2$Corg - mean_actual.C)^2)
+#mse
+mse.svr.C <- mean((datatrain.mod2$Corg - Mod.SVR$fitted)^2)
+#mae
+mae.svr.C <- mean(abs(datatrain.mod2$Corg - Mod.SVR$fitted))
+# Print the results
+cat("RMSE MODEL.C:", rmse.svr.C, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.svr.C, "\n")
+cat("MSEMODEL.C:", mse.svr.C, "\n")
+cat("MAE MODEL.C:", mae.svr.C, "\n")
+##-----------------VALIDATION RF MOD 1-------------
+Modpred.SVR.V <- predict(Mod.SVR, newdata = data.mod2.rev[-svr.training, ])
+
+# Step 2: Calculate RMSE
+rmse.svr.V <- sqrt(mean((Modpred.SVR.V - datatest.mod2$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.V <- mean(datatest.mod2$Corg)
+r2.svr.V <- 1 - sum((datatest.mod2$Corg - Modpred.SVR.V)^2) / sum((datatest.mod2$Corg - mean_actual.V)^2)
+#mse
+mse.svr.V <- mean((datatest.mod2$Corg - Modpred.SVR.V)^2)
+#mae
+mae.svr.V <- mean(abs(datatest.mod2$Corg - Modpred.SVR.V))
+# Print the results
+cat("RMSE MODEL.C:", rmse.svr.V, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.svr.V, "\n")
+cat("MSEMODEL.C:", mse.svr.V, "\n")
+cat("MAE MODEL.C:", mae.svr.V, "\n")
+
+##----------------------------Saving model 2 SVR ----------------
+# setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+# # saving the model
+# saveRDS(Mod.SVR, 
+#         file = "F:\\DATA RISET\\TEMP DATA R\\ModelSVR_datamod2.rda")
+# # call model
+# Mod.SVR.dummy = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelSVR_datamod2.rda")
+
+##-------------APPLY SVR TO RASTER AND SAVE IT----------
+# #Apply model to raster
+# setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+# map.SVR.r1 <- predict(r.datamod2, Mod.SVR, "SOC_SVR_datamod2.tif",
+#                      format = "GTiff", datatype = "FLT4S", overwrite = TRUE)
+#WE WILL TRY LATER (8 APRIL 2023) CAUSE TAKES A TIME
+
+# FL4S indicates that a 4 byte, signed floating point values are to be written to file.
+plot(map.SVR.r1,
+     main = "SVR model predicted 0-5cm log SOC")
+ 
+##--------------------DATA MODEL 3 SVR-------------
+set.seed(50)
+svr.training <- sample(nrow(data.mod3.rev), 0.75 * nrow(data.mod3.rev))
+datatrain.mod3 <- data.mod3.rev[svr.training, ]
+datatest.mod3<-data.mod3.rev[-svr.training, ]
+
+Mod.SVR = svm(SOC~. ,
+              data =data.mod3.rev[svr.training, ],
+              cost = 5,
+              epsilon =0.1,
+              gamma=0.01
+)
+Mod.SVR
+
+# library(devtools)
+# library(ithir)
+# Internal validation well known as Calibration
+Modpred.SVR.C <- predict(Mod.SVR, newdata =data.mod3.rev[svr.training, ])
+goof(observed = data.mod3.rev$SOC[svr.training], predicted = Modpred.SVR.C)
+
+# External validation
+Modpred.SVR.V <- predict(Mod.SVR, newdata = data.mod3.rev[-svr.training, ])
+goof(observed = data.mod3.rev$SOC[-svr.training], predicted = Modpred.SVR.V)
+
+
+#PLOT actual and predict using training data
+plot(data.mod3.rev$SOC[-svr.training], Modpred.SVR.V, col='blue', pch=16, ylab = "predicted rating NN", xlab = "real rating")
+abline(0,1)
+
+##------------------CALIBRATION SVR MOD 2-------------
+# Step 2: Calculate RMSE
+rmse.svr.C <- sqrt(mean((Mod.SVR$fitted - datatrain.mod3$SOC)^2))
+# Step 3: Calculate R2
+mean_actual.C <- mean(datatrain.mod3$SOC)
+r2.svr.C <- 1 - sum((datatrain.mod3$SOC - Mod.SVR$fitted)^2) / sum((datatrain.mod3$SOC - mean_actual.C)^2)
+#mse
+mse.svr.C <- mean((datatrain.mod3$SOC - Mod.SVR$fitted)^2)
+#mae
+mae.svr.C <- mean(abs(datatrain.mod3$SOC - Mod.SVR$fitted))
+# Print the results
+cat("RMSE MODEL.C:", rmse.svr.C, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.svr.C, "\n")
+cat("MSEMODEL.C:", mse.svr.C, "\n")
+cat("MAE MODEL.C:", mae.svr.C, "\n")
+##-----------------VALIDATION RF MOD 1-------------
+Modpred.SVR.V <- predict(Mod.SVR, newdata = data.mod3.rev[-svr.training, ])
+
+# Step 2: Calculate RMSE
+rmse.svr.V <- sqrt(mean((Modpred.SVR.V - datatest.mod3$SOC)^2))
+# Step 3: Calculate R2
+mean_actual.V <- mean(datatest.mod3$SOC)
+r2.svr.V <- 1 - sum((datatest.mod3$SOC - Modpred.SVR.V)^2) / sum((datatest.mod3$SOC - mean_actual.V)^2)
+#mse
+mse.svr.V <- mean((datatest.mod3$SOC - Modpred.SVR.V)^2)
+#mae
+mae.svr.V <- mean(abs(datatest.mod3$SOC - Modpred.SVR.V))
+# Print the results
+cat("RMSE MODEL.C:", rmse.svr.V, "\n")
+cat("R-squared (R2)  MODEL.C:", r2.svr.V, "\n")
+cat("MSEMODEL.C:", mse.svr.V, "\n")
+cat("MAE MODEL.C:", mae.svr.V, "\n")
+
+
+
+#
+#
+#
+
+##------MODELING USING ANN WITH CONTINUOUS DATA-----
+library(neuralnet)
+#select raster for ANN that we have to scale, yup.. in ANN we create new data model
+#select raster layer category for ANN
+# stack.categ.ann <-dropLayer(r.cov.stack1,c("NDRE" ,  "SATVI" , "EVI"   , "NBR2"  , "STI"  ,  "SMI"    ,
+#                                            "LST" ,   "CH"  ,   "MSI"  ,  "RBRI"  , "RGRI"  , "VDEPTH", "ELEV" ,  "SLOPE"  ,"ASPECT",
+#                                            "s1", "s3", "Qyg", "Tmb")) #"s1", "s3", "Qyg", "Tmb" have NaN data cause theres no sample
+# names(stack.categ.ann)
+# head(stack.categ.ann)
+#scale the raster
+scale.raster.ann <-scale(r.datamod2, scale=TRUE)
+# scale.raster.ann <- calc(stack.categ.ann,function(x)
+#                           (x - min(x)) / (max(x) - min(x))
+#                           ) #this scale not capble for categorical one coding with 0 and 1 value
+names(scale.raster.ann)
+summary(scale.raster.ann$NDVI)
+#name column raster is gone and temp file can gone so we have to rename and save raster
+setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+library(terra)
+r.scale.ann.exp1 <- rast(scale.raster.ann)
+## raster that has been drop s1, s3, Qyg, Tmb, builtsup
+names(r.scale.ann.exp1)<-c("NDVI","NDRE", "SATVI", "EVI","NBR2","RBRI" ,"RGRI", "MSI","STI", "SMI",
+                           "LST"  ,  "CHrev",    
+                           "VDEPTH", "ELEV"  ,"SLOPE" ,
+                           "s2", "s4", "s5", "s6", "s7", "s8", "s9", "s10",
+                           "g1", "g2", "g3", "g4", "g5", "g6",
+                           "Qc","Ql","Qvu", "Qyd", "Qyl", "Qyt", "Qyu", 
+                           "cropland","plantation","bareland","paddyfield","shrubland","forest")
+r.scale.ann.exp <- terra::writeRaster(r.scale.ann.exp1, 
+                                      filename=file.path("F:/DATA RISET/TEMP DATA R", "r_scaleANN_datamod2.tif"), 
+                                      overwrite=TRUE)
+
+head(r.scale.ann.exp)
+
+#this raster FINAL for ANN 
+r.scale.ann.1 <- raster::stack("r_scaleANN_datamod1.tif")
+r.scale.ann.2 <- raster::stack("r_scaleANN_datamod2.tif")
+
+#Extract new value on data model
+data.mod.ANN1 <- raster::extract(r.scale.ann.1, shpDATALAB, sp = 1,
+                                 method = "simple")
+data.mod.ANN2 <- raster::extract(r.scale.ann.2, shpDATALAB, sp = 1,
+                                 method = "simple")
+names(data.mod.ANN1)
+str(data.mod.ANN1)
+#drop column that not use for modeling
+# data.mod.ANN = subset(data.mod.ANN1, select = -c(Kode_Sampe, X, Y, pH_H2O, pH_KCl, 
+#                                                  Pasir, Debu, Liat, log_Corg, coords.x1, coords.x2))
+data.mod.ANN.1<- as.data.frame(data.mod.ANN1)
+data.mod.ANN.1 <-data.mod.ANN.1[c(6, 11:55)]
+
+data.mod.ANN.2<- as.data.frame(data.mod.ANN2)
+data.mod.ANN.2 <-data.mod.ANN.2[c(6, 11:52)]
+str(data.mod.ANN.2)
+
+str(data.mod.ANN)
+# # Scale the Data
+# scale01 <- function(x){
+#   (x - min(x)) / (max(x) - min(x))
+# }
+# 
+# data.mod.ANN <- data.mod.ANN %>%
+#   mutate_all(scale01)
+# str(data.mod.ANN)
+
+##------------------------------ANN DATA MODEL 1----------------------
+# Split into test and train sets
+set.seed(29)
+ANN_Train <- sample_frac(tbl = data.mod.ANN.1, replace = FALSE, size = 0.75)
+ANN_Test <- anti_join(data.mod.ANN.1, ANN_Train)
+
+#MODELING ANN
+
+# sigmoid <- function(x) {
+#   1 / (1 + exp(-x))
+# }
+
+Mod.ANN = neuralnet(Corg ~.,
+               data = ANN_Train,
+               hidden=c(100,50),
+               act.fct='logistic',
+               err.fct = "sse",
+               linear.output = TRUE,
+               learningrate=0.1,
+               rep=10
+               # algorithm = "backprop" # Use the backpropagation algorithm
+               # stepmax = 2000  # Set the maximum number of training steps to 10
+               )
+
+
+# print(Mod.ANN)
+# plot(Mod.ANN,rep = "best")
+# print(Mod.ANN,rep = "best")
+# str(ANN_Train)
+
+# Internal validation well known as Calibration---using SSE
+# Mod.ANN$result.matrix
+# Mod.ANN$net.result
+#SELECT BEST REPLICATION
+Mod.ANN.rep<-compute(Mod.ANN,ANN_Train, rep = which.min(Mod.ANN$result.matrix[1,]))
+
+ANN_Train$Corg <- as.numeric(ANN_Train$Corg)
+Mod.ANN.rep$net.result <- as.numeric(unlist(Mod.ANN.rep$net.result))
+Modpred.ANN.C <- sum((Mod.ANN.rep$net.result - ANN_Train$Corg)^2)/2
+paste("SSE: ", round(Modpred.ANN.C, 4))
+# #THE RESULT CALIBRATION WITH ALL COVARIATE
+# [1] "SSE:  0.4085"
+
+# length(ANN_Train$Corg)
+# length(Mod.ANN.rep$net.result)
+
+# Step 2: Calculate RMSE
+rmse.C <- sqrt(mean((Mod.ANN.rep$net.result - ANN_Train$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.C <- mean(ANN_Train$Corg)
+r2.C <- 1 - sum((ANN_Train$Corg - Mod.ANN.rep$net.result)^2) / sum((ANN_Train$Corg - mean_actual.C)^2)
+#mse
+mse.C <- mean((ANN_Train$Corg - Mod.ANN.rep$net.result)^2)
+#mae
+mae.C <- mean(abs(ANN_Train$Corg - Mod.ANN.rep$net.result))
+
+# Print the results
+cat("RMSE ANN MODEL.C:", rmse.C, "\n")
+cat("R-squared (R2) ANN MODEL.C:", r2.C, "\n")
+cat("MSE ANN MODEL.C:", mse.C, "\n")
+cat("MAE ANN MODEL.C:", mae.C, "\n")
+
+#PLOT actual and predict using training data
+plot(ANN_Train$Corg, Mod.ANN.rep$net.result, col='blue', pch=16, ylab = "predicted rating NN", xlab = "real rating")
+abline(0,1)
+
+# External validation---using SSE
+Test_ANN_Output <- neuralnet::compute(Mod.ANN, ANN_Test[, 2:46])$net.result
+# Test_ANN_Output
+# ANN_Test
+Modpred.ANN.V <- sum((Test_ANN_Output - ANN_Test$Corg)^2)/2
+Modpred.ANN.V
+paste("SSE: ", round(Modpred.ANN.V, 4))
+#THE RESULT VALIDATION WITH ALL COVARIATE
+# SSE: 1.650255
+
+#PLOT actual and predict using test data
+plot(ANN_Test$Corg, Test_ANN_Output, col='blue', pch=16, ylab = "predicted rating NN", xlab = "real rating")
+abline(0,1)
+
+##---------CALCULATE RMSE AND R2 IN ANN----
+# Step 2: Calculate RMSE
+rmse <- sqrt(mean((Test_ANN_Output - ANN_Test$Corg)^2))
+# Step 3: Calculate R2
+mean_actual <- mean(ANN_Test$Corg)
+r2 <- 1 - sum((ANN_Test$Corg - Test_ANN_Output)^2) / sum((ANN_Test$Corg - mean_actual)^2)
+#mse
+mse <- mean((ANN_Test$Corg - Test_ANN_Output)^2)
+#mae
+mae <- mean(abs(ANN_Test$Corg - Test_ANN_Output))
+#print
+cat("RMSE ANN MODEL.V:", rmse, "\n")
+cat("R-squared (R2) ANN MODEL.V:", r2, "\n")
+cat("MSE ANN MODEL.V:", mse, "\n")
+cat("MSE ANN MODEL.V:", mae, "\n")
+
+##----------------------------Saving model ANN----------------
+# saving the model
+saveRDS(Mod.ANN, 
+        file = "F:\\DATA RISET\\TEMP DATA R\\ModelANN_datamod1.rda")
+# call model
+Mod.ANN.dummy = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelANN_datamod1.rda")
+
+setwd("F:\\DATA RISET\\TEMP DATA R") # set directory for save all data temp
+names(r.scale.ann)
+
+# ##----------------APPLY MODEL ANN TO DATA RASTER-----------------
+# map.ANN.r1 <- predict(r.scale.ann.1, Mod.ANN,
+#                       "SOC_ANN_datamod1rep.tif",
+#                       format = "GTiff", datatype = "FLT4S", overwrite = TRUE)
+
+
+# FL4S indicates that a 4 byte, signed floating point values are to be written to file.
+plot(map.ANN.r1,
+     main = "ANN model predicted SOC 0-30 cm",
+     )
+
+##------------------------------ANN DATA MODEL 2----------------------
+# Split into test and train sets
+set.seed(29)
+ANN_Train.2 <- sample_frac(tbl = data.mod.ANN.2, replace = FALSE, size = 0.75)
+ANN_Test.2 <- anti_join(data.mod.ANN.2, ANN_Train)
+
+Mod.ANN.2 = neuralnet(Corg ~.,
+                    data = ANN_Train.2,
+                    hidden=c(100,50),
+                    act.fct='logistic',
+                    err.fct = "sse",
+                    linear.output = TRUE,
+                    learningrate=0.1,
+                    rep=10)
+
+
+
+#SELECT BEST REPLICATION
+Mod.ANN.rep.2<-compute(Mod.ANN.2,ANN_Train.2, rep = which.min(Mod.ANN.2$result.matrix[1,]))
+
+ANN_Train.2$Corg <- as.numeric(ANN_Train.2$Corg)
+Mod.ANN.rep.2$net.result <- as.numeric(unlist(Mod.ANN.rep.2$net.result))
+Modpred.ANN.C.2 <- sum((Mod.ANN.rep.2$net.result - ANN_Train.2$Corg)^2)/2
+paste("SSE: ", round(Modpred.ANN.C.2, 4))
+
+# RMSE
+rmse.C.2 <- sqrt(mean((Mod.ANN.rep.2$net.result - ANN_Train.2$Corg)^2))
+# R2
+mean_actual.C.2 <- mean(ANN_Train.2$Corg)
+r2.C.2 <- 1 - sum((ANN_Train.2$Corg - Mod.ANN.rep.2$net.result)^2) / sum((ANN_Train.2$Corg - mean_actual.C.2)^2)
+# mse
+mse.C.2 <- mean((ANN_Train.2$Corg - Mod.ANN.rep.2$net.result)^2)
+# mae
+mae.C.2 <- mean(abs(ANN_Train.2$Corg - Mod.ANN.rep.2$net.result))
+# Print the results
+cat("RMSE ANN MODEL.C:", rmse.C.2, "\n")
+cat("R-squared (R2) ANN MODEL.C:", r2.C.2, "\n")
+cat("MSE ANN MODEL.C:", mse.C.2, "\n")
+cat("MAE ANN MODEL.C:", mae.C.2, "\n")
+
+#PLOT actual and predict using training data
+plot(ANN_Train.2$Corg, Mod.ANN.rep.2$net.result, col='blue', pch=16, 
+     ylab = "predicted rating NN", xlab = "real rating")
+abline(0,1)
+
+# External validation---using SSE
+Test_ANN_Output.2 <- neuralnet::compute(Mod.ANN.2, ANN_Test.2[, 2:43])$net.result
+# Test_ANN_Output
+# ANN_Test
+Modpred.ANN.V.2 <- sum((Test_ANN_Output.2 - ANN_Test.2$Corg)^2)/2
+Modpred.ANN.V.2
+paste("SSE: ", round(Modpred.ANN.V.2, 4))
+
+#PLOT actual and predict using test data
+plot(ANN_Test.2$Corg, Test_ANN_Output.2, col='blue', pch=16, 
+     ylab = "predicted rating NN", xlab = "real rating")
+abline(0,1)
+
+##---------CALCULATE RMSE AND R2 IN ANN----
+# Step 2: Calculate RMSE
+rmse.test.2 <- sqrt(mean((Test_ANN_Output.2 - ANN_Test.2$Corg)^2))
+# Step 3: Calculate R2
+mean_actual.test.2 <- mean(ANN_Test.2$Corg)
+r2.test.2 <- 1 - sum((ANN_Test.2$Corg - Test_ANN_Output.2)^2) / sum((ANN_Test.2$Corg - mean_actual.test.2)^2)
+# mse
+mse.test.2 <- mean((ANN_Test.2$Corg - Test_ANN_Output.2)^2)
+# mae
+mae.test.2 <- mean(abs(ANN_Test.2$Corg - Test_ANN_Output.2))
+cat("RMSE ANN MODEL.V:", rmse.test.2, "\n")
+cat("R-squared (R2) ANN MODEL.V:", r2.test.2, "\n")
+cat("MSE ANN MODEL.V:", mse.test.2, "\n")
+cat("MAE ANN MODEL.V:", mae.test.2, "\n")
+##----------------------------Saving model ANN----------------
+# # saving the model
+# saveRDS(Mod.ANN.2,
+#         file = "F:\\DATA RISET\\TEMP DATA R\\ModelANN_datamod2.rda")
+# 
+# # call model
+# Mod.ANN.dummy2 = readRDS("F:\\DATA RISET\\TEMP DATA R\\ModelANN_datamod2.rda")
+
+# ##---------------apply on raster and save it-------------
+# map.ANN.r2 <- predict(r.scale.ann.2, Mod.ANN.2,
+#                       "SOC_ANN_datamod2.tif",
+#                       format = "GTiff", datatype = "FLT4S", overwrite = TRUE)
+
+
+
+
+
+
+
+
+##--------MODELING SOC USING RF WITH DISCREATE DATA SOC (CATEGORY)-------
+#CHECK SEBARAN KATEGORI SOC with PCA
+library(FactoMineR)
+library(pca3d)
+library(devtools)
+library(factoextra)
+library(prcomp)
+summary(dataclass1)
+
+PCATRY1CAT <- dataclass1[c(1:15, 17:20)]
+fpca_cat <-prcomp(PCATRY1CAT, scale = TRUE)
+fpca_cat
+fviz_pca_biplot(fpca_TOTALlog,
+                label="var", 
+                habillage=dataclass1$class_Corg,
+                col.var="black",
+                addEllipses = TRUE, 
+                ellipse.level=0.5)
+
+##--HASIL dari PCA memperlihatkan sebaran grup Corg tidak spotted.. jadi kemungkinan
+###penggabungan kelas tidak bisa.. kita coba lakukan SMOTE (di next script)
+
+library(randomForest)
+Modcat.RF <- randomForest(terron ~ AACN + Drainage.Index
+                          + Light.Insolation + TWI + Gamma.Total.Count,
+                          data = DSM_data[training, ], ntree = 500, mtry = 5)
+# Output random forest model diognostics
+print(hv.RF)
+# output relative importance of each covariate
+importance(hv.RF)
+
+# Prediction of classes
+predict(hv.RF, type = "response", newdata = DSM_data[training, ])
+
+# Class probabilities
+predict(hv.RF, type = "prob", newdata = DSM_data[training, ])
+
+C.pred.hv.RF <- predict(hv.RF, newdata = DSM_data[training, ])
+goofcat(observed = DSM_data$terron[training],
+        predicted = C.pred.hv.RF)
+
+V.pred.hv.RF <- predict(hv.RF, newdata = DSM_data[-training, ])
+goofcat(observed = DSM_data$terron[-training],
+        predicted = V.pred.hv.RF)
+
+# class prediction
+map.RF.c <- predict(covStack, hv.RF, filename = "hv_RF_class.tif",
+                    format = "GTiff",overwrite = T, datatype = "INT2S")
+# plot
+levelplot(map.RF.c, col.regions = area_colors,
+          xlab = "", ylab = "")
