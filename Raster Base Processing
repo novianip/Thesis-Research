@@ -1,0 +1,554 @@
+##----------------RASTER BASE PROCESSING-RASTER STACK-----
+library(dplyr)
+library(stats)
+library(tidyverse)
+library(sf)
+library(rgdal)
+library(raster)
+#data rearrange column in data lab
+shpDATALAB <- st_read ("F:/DATA RISET/SHP/KOVARIAT ATRIBUT/COVDATALAB.shp")
+shpDATALAB$log_Corg <- log (shpDATALAB$Corg)
+colnames(shpDATALAB)
+shpDATALAB <- shpDATALAB[c("Kode_Sampe","X","Y","pH_H2O","pH_KCl","Pasir", "Debu", "Liat",
+                           "KA_Grav","KA_Vol","Moisture","ORDO","GEOLOGY","LC","geometry",
+                           "Corg", "log_Corg")]
+st_geometry_type(shpDATALAB)
+st_crs(shpDATALAB)
+
+#add data border sub das cikapudung untuk layout in map and clip area
+shpcika <-st_read("F:/DATA RISET/SHP/SUBDAS_CIKAPUNDUNG.shp")
+
+#layouting point in map
+library(ggplot2)
+library(RColorBrewer)
+ggplot() + 
+  geom_sf(data = shpDATALAB, size = 1.5, color = "black", fill = "cyan1") + 
+  ggtitle("Titik Sample") + 
+  coord_sf()
+
+pal<- brewer.pal(5, "Oranges") # we select 7 colors from the palette
+class(pal)
+plot(shpDATALAB['Corg'],
+     main = "Distribusi C-organik Sub-DAS Cikapundung",
+     breaks ="quantile" , nbreaks = 5, pal = pal)
+
+ggplot() + 
+  geom_sf(data = shpDATALAB)+
+  scale_fill_viridis_c(trans = "sqrt", alpha = .4) +
+  stat_sf_coordinates()
+
+ggplot(map) +
+  geom_sf(color = "white", aes(fill = Corg)) +
+  theme(legend.position = "none")
+
+library(viridis)
+ggplot() + 
+  geom_sf(data = shpcika) + 
+  geom_sf(data = shpDATALAB, aes(color = Corg)) +
+  coord_sf() +  scale_color_viridis(direction = -1, option ="plasma")+
+  labs(title = "Distribusi Kandungan C-organik Tanah\n di Sub-DAS Cikapundung",
+       subtitle = "Pada 146 titik sampel", 
+       caption = "Data Source: Hasil Survei 2021-2022")
+
+##-------------IMPORT RASTER--------------
+##install.packages(c("Rcpp", "rgdal", "sp", "terra", "raster"))
+library(sp)
+library(raster)
+#VAR ORGANISM
+r.ndvi <- raster("F:/DATA RISET/Raster/COVARIAT/NDVI_try3.tif")
+names(r.ndvi)<-"NDVI"
+r.ndre <- raster("F:/DATA RISET/Raster/COVARIAT/NDRE_try3.tif")
+names(r.ndre)<-"NDRE"
+r.satvi <- raster("F:/DATA RISET/Raster/COVARIAT/SATVI_try3.tif")
+names(r.satvi)<-"SATVI"
+r.evi <- raster("F:/DATA RISET/Raster/COVARIAT/EVI_try3.tif")
+names(r.evi)<-"EVI"
+r.nbr2 <- raster("F:/DATA RISET/Raster/COVARIAT/NBR2_try3.tif")
+names(r.nbr2)<-"NBR2"
+r.sti <- raster("F:/DATA RISET/Raster/COVARIAT/CMR_try3.tif")
+names(r.sti)<-"STI"
+r.msi<- raster("F:/DATA RISET/Raster/COVARIAT/FMR_try3.tif")
+names(r.msi)<-"MSI"
+r.rbri<- raster("F:/DATA RISET/Raster/COVARIAT/IOR_try3.tif")
+names(r.rbri)<-"RBRI"
+r.rgri<- raster("F:/DATA RISET/Raster/COVARIAT/FI_try3.tif")
+names(r.rgri)<-"RGRI"
+
+#VAR CLIMATE
+r.lst <- raster("F:/DATA RISET/Raster/COVARIAT/LST_2013-2022.tif")
+names(r.lst)<-"LST"
+r.chrev <- raster("F:/DATA RISET/Raster/COVARIAT/resample_CH2013-2022rev.tif")
+names(r.chrev)<-"CHrev"
+r.smi <- raster("F:/DATA RISET/Raster/COVARIAT/MSMMI_try3.tif")
+names(r.smi)<-"SMI"
+
+#VAR TOPOGRAPHY
+r.valey <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/resample_ValleyDepth.tif")
+names(r.valey)<-"VDEPTH"
+r.elev <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/resample_Elev1.tif")
+names(r.elev)<-"ELEV"
+r.slope <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/Slope_percent2.tif")
+names(r.slope)<-"SLOPE"
+r.aspect <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/resample_Aspect.tif")
+names(r.aspect)<-"ASPECT"
+
+#VAR ANTROPOGENIC
+r.lulc <-raster("F:/DATA RISET/Raster/Landcover AOI Paten/land_cover_30Juni.tif")
+names(r.lulc) <- "LC"
+#--Keterangan LULC class
+# KODE
+# 0 = pemukiman
+# 1 = cropland
+# 2 = plantation
+# 3 = bareland
+# 4 = paddy
+# 5 = shrubland
+# 6 = forest
+
+#VAR PARENT MATERIAL DAN SOIL BERUPA DATA CATEGORICAL, CODE ADA DI BAWAH
+
+#stacking raster all covariate
+covstack <- stack (r.ndvi, r.ndre, r.satvi, r.evi,r.nbr2, 
+                   r.rbri, r.rgri, r.msi, r.sti, r.smi,
+                   r.lst, r.chrev, 
+                   r.valey, r.elev, r.slope, r.aspect)
+head(covstack)
+summary(covstack)
+
+##-------EXTRACT DATA POINT FROM RASTER FOR 146 POINT----
+
+DSM_data <- raster::extract(covstack, shpDATALAB, sp = 1,
+                    method = "simple")
+
+DSM_data<- as.data.frame(DSM_data)
+str(DSM_data)
+colnames(DSM_data)
+
+#extract data ch revisi 2013-2022 utk buat dataset baru
+data_chrev <-raster::extract(r.chrev, shpDATALAB, sp =1,
+                             method="simple")
+r.chrev
+data_chrev<- as.data.frame(data_chrev)
+write.csv(data_chrev, "F:\\DATA RISET\\Raster\\TRASH\\data_chrev1.csv", row.names=FALSE)
+#-----RENAME COLUMN --
+DSM_data <- DSM_data %>% rename("NDVI_try3" ="B8.1",
+                                "NDRE_try3" = "B7",
+                                "SATVI_try3" ="B11.1",
+                                "EVI_try3"="constant",
+                                "NBR2_try3"="B11.2",
+                                "CMR_try3"="B11.3",
+                                "MSMMI_try3"="B11.4",
+                                "NIR_try3"="B8.2",
+                                "RED_try3"="B4.1",
+                                "SWIR1_try3"="B11.5",
+                                "CH_10yr"= "resample_CH10yr",
+                                "LST_10yr" ="LST_2013.2022",
+                                "FMR_try3"="B11.6",
+                                "IOR_try3"="B4.2",
+                                "FI_try3"="B4.3",
+                                "VDEPTH"="resample_ValleyDepth",
+                                "ELEV"="resample_Elev1",
+                                "SLOPE"= "Slope_percent2",
+                                "ASPECT"="resample_Aspect")
+#cHECK NAN DATA
+which(!complete.cases(DSM_data))
+#interger(0) artinya tidak ada NAN
+colnames(DSM_data)
+DSM_DATATRY3 <-DSM_data
+DSM_DATATRY3_point<- st_as_sf(DSM_DATATRY3, coords= c("coords.x1", "coords.x2"), crs="+proj=longlat +datum=WGS84 +no_defs")
+st_write(DSM_DATATRY3_point, "F:\\DATA RISET\\SHP\\KOVARIAT ATRIBUT\\DSM_DATATRY3.shp", driver="ESRI Shapefile")
+str(DSM_DATATRY3)
+
+##-----------Crop Raster as Sub DAS Cikapundung extent---------
+shpcika <-st_read("F:/DATA RISET/SHP/BATAS SUB-DAS CIKAPUNDUNG NEW/SUBDAS CIKAPUNDUNG.shp")
+shpcika
+shpLCnonbuilt <-st_read("F:/DATA RISET/SHP/Land Cover AOI Paten/Landcover_Cikapundung_nonbuilt.shp")
+shpLCnonbuilt
+
+plot(shpcika,
+     main = "Shapefile imported into R - Cikapundung",
+     axes = TRUE,
+     border = "blue")
+plot(shpLCnonbuilt,
+     main = "Shapefile imported into R - Cikapundung",
+     axes = TRUE,
+     border = "blue")
+
+covstack_crop <- crop(covstack, extent(shpLCnonbuilt))
+plot(covstack_crop, main = "Cropped Covariate Stack")
+head(covstack_crop)
+covstack_crop.df <-as.data.frame(covstack_crop)
+
+# summary statictic using stat.desc in library pastecs
+library(pastecs)
+stat.desc(covstack_crop.df )
+
+#clip covstack using shp area cikapundung
+covstack_mask <-mask (covstack_crop, shpcika)
+plot(covstack_mask$NDVI_try3, main = "Cropped Covariate Stack")
+print(covstack_mask)
+summary(covstack_mask$NDVI_try3)
+
+
+# ##-------EXTRACT MULTI VALUE TO POINT FROM RASTER IN STEP FOR RESAMPLE----
+##topography
+# rasvaley <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/Valley_Depth1.tif")
+# raselev <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/SQR_DEMNAS_Cikapundung.tif")
+# rasslope <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/Slope_percent1.tif")
+# rasaspect <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/Aspect.tif")
+# rasaspect
+
+# shpresample <- st_read ("F:/DATA RISET/Raster/TRASH/resample_point1.shp")
+# shpresample
+# 
+# 
+# rasvalue<-raster::extract(rasch, shpresample, sp = 1,
+#                           method = "simple")
+
+# topostack<- stack (rasvaley, raselev)
+# 
+# rasvalue<-raster::extract(topostack, shpresample, sp = 1,
+#                           method = "simple")
+# rasvalue <- as.data.frame(rasvalue)
+# 
+# rasvalslope <- raster::extract(rasslope, shpresample, sp = 1,
+#                             method = "simple")
+# rasvalslope <- as.data.frame(rasvalslope)
+# rasvalslope
+# 
+# rasvalaspect <- raster::extract(rasaspect, shpresample, sp = 1,
+#                                method = "simple")
+# rasvalaspect <- as.data.frame(rasvalaspect)
+# rasvalaspect
+# 
+# #write.csv(rasvalslope, "F:\\DATA RISET\\Raster\\TRASH\\Slope.csv", row.names=FALSE)
+
+# ##CURAH HUJAN 2013-2022
+# rasch <- raster("F:/DATA RISET/Raster/CH Riset/Mean_CH_2013-2022.tif")
+# 
+# shpresample <- st_read ("F:/DATA RISET/Raster/TRASH/resample_point1.shp")
+# head(shpresample)
+# shpresample
+# 
+# #EXTRACT
+# rasvalue<-raster::extract(rasch, shpresample, sp = 1,
+#                           method = "simple")
+# library(sf)
+# rasvalch.gcs<-terra::project(rasvalue, "+proj=longlat +datum=WGS84 +no_defs")
+# rasvalch.gcs<-spTransform(rasvalue, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+# rasvalch.gcs
+# rasvaluech<-as.data.frame(rasvalue) 
+# 
+# write.csv(rasvaluech, "F:\\DATA RISET\\Raster\\TRASH\\CH13-22_1.csv", row.names=FALSE)
+# head(rasvalue)
+# summary(rasvalue)
+# 
+# #rasterize CH
+# r.chrev <- raster::rasterize(x = rasvalch.gcs, y = r.ndvi, field = "Mean_CH_2013.2022")
+# names(r.chrev) <- "CH"
+# r.chrev
+# 
+# summary(r.chrev)
+# # writeRaster(r.chrev,'F:/DATA RISET/Raster/TRASH//resample_CH2013-2022rev.tif')
+# 
+# #CHECK THE RASTER FOR STACKING
+# raster.stack <- stack (r.chrev, r.red) 
+# 
+# #gagal karena conflict datum "Warning message:
+# # In .local(x, y, ...) : Transforming SpatialPoints to the crs of the Raster
+# #output jadi NAN.. SO kitA project dulu ke GCS trus rasterize ya
+
+# ##-----MAKE SHP POINT FROM DATA FRAME----
+# 
+# 
+# ##----MAKE SHP POINT FROM CSV-----
+# #input CSV to R to make csv to point (Elev_Valey dan Slopecsv)
+# sum(is.nan(Elev_Valey$coords.x2))
+# 
+# elev_valeypoint<- st_as_sf(Elev_Valey, coords= c("coords.x1", "coords.x2"), crs="+proj=longlat +datum=WGS84 +no_defs")
+# elev_valeypoint
+# class(elev_valeypoint)
+# 
+# slopepoint<- st_as_sf(rasvalslope, coords= c("coords.x1", "coords.x2"), crs="+proj=longlat +datum=WGS84 +no_defs ")
+# slopepoint
+# class(slopepoint)
+# 
+# aspectpoint<- st_as_sf(rasvalaspect, coords= c("coords.x1", "coords.x2"), crs="+proj=longlat +datum=WGS84 +no_defs ")
+# aspectpoint
+# class(slopepoint)
+# 
+# st_write(elev_valeypoint, "F:\\DATA RISET\\Raster\\TRASH\\point-elev-valey.shp", driver="ESRI Shapefile")
+# st_write(slopepoint, "F:\\DATA RISET\\Raster\\TRASH\\point-slope.shp", driver="ESRI Shapefile")
+# st_write(aspectpoint, "F:\\DATA RISET\\Raster\\TRASH\\point-aspect.shp", driver="ESRI Shapefile")
+
+##------------INPUT ALL BAND SENTINEL IN RASTER-----
+r.blue <- raster("F:/DATA RISET/Raster/COVARIAT/Spectral/BLUE_try3.tif")
+r.green <- raster("F:/DATA RISET/Raster/COVARIAT/Spectral/GREEN_try3.tif")
+r.re1 <- raster("F:/DATA RISET/Raster/COVARIAT/Spectral/RE1_try3.tif")
+r.re2 <- raster("F:/DATA RISET/Raster/COVARIAT/Spectral/RE2_try3.tif")
+r.re3 <- raster("F:/DATA RISET/Raster/COVARIAT/Spectral/RE3_try3.tif")
+r.re4 <- raster("F:/DATA RISET/Raster/COVARIAT/Spectral/RE4_try3.tif")
+r.swir2 <- raster("F:/DATA RISET/Raster/COVARIAT/Spectral/SWIR2_try3.tif")
+
+shpCLASSCORG <- st_read ("F:/DATA RISET/SHP/KOVARIAT ATRIBUT/KELAS_CORG.shp")
+
+spectral_stack <- stack (r.blue, r.green, r.red, r.re1, r.re2, r.re3, 
+                   r.nir, r.re4, r.swir, r.swir2)
+
+##-------EXTRACT DATA POINT FROM RASTER FOR 146 POINT----
+spectral_sentinel <- raster::extract(spectral_stack, shpCLASSCORG, sp = 1,
+                            method = "simple")
+
+
+##---------RASTERIZAZION SHP DATA CATEGORICAL SOIL AND GEOLOGY----------
+shpsoil <-readOGR("F:/DATA RISET/SHP/Jenis Tanah/SPT_Cikapundung1.shp")
+shpsoil
+
+shpgeo <-readOGR("F:/DATA RISET/SHP/Litologi/Litologi_AIO_riset1.shp")
+shpgeo
+
+
+shplandcover <-readOGR("F:/DATA RISET/SHP/Litologi/Litologi_AIO_riset1.shp")
+
+# the "USDA14_1", "ORDO", "g_group", "SYMBOLS" and "LANDCOVER" attribute from the vector layer will be used for the
+
+# SUB-GROUP rasterization process. It has to be a factor
+shpsoil@data$USDA14_1 <- as.factor(shpsoil@data$USDA14_1)
+summary(as.factor(as.numeric(shpsoil@data$USDA14_1)))  # numeric factor
+summary(shpsoil@data$USDA14_1)
+#save the levels names in a character vector
+symbolsubgroup.lev <- levels(shpsoil$USDA14_1)
+symbolsubgroup.lev 
+
+# GREATGROUP rasterization process. It has to be a factor
+shpsoil@data$g_group <- as.factor(shpsoil@data$g_group)
+summary(as.factor(as.numeric(shpsoil@data$g_group)))  # numeric factor
+summary(shpsoil@data$g_group)
+#save the levels names in a character vector
+symbolgrtgroup.lev <- levels(shpsoil$g_group)
+symbolgrtgroup.lev 
+
+# ORDO rasterization process. It has to be a factor
+shpsoil@data$ordo <- as.factor(shpsoil@data$ordo)
+summary(as.factor(as.numeric(shpsoil@data$ordo)))  # numeric factor
+summary(shpsoil@data$ordo)
+#save the levels names in a character vector
+symbolordo.lev <- levels(shpsoil$ordo)
+symbolordo.lev
+
+# GEOLOGY rasterization process. It has to be a factor
+shpgeo@data$SYMBOLS <- as.factor(shpgeo@data$SYMBOLS)
+summary(as.factor(as.numeric(shpgeo@data$SYMBOLS)))  # numeric factor
+summary(shpgeo@data$SYMBOLS)
+#save the levels names in a character vector
+symbolgeo.lev <- levels(shpgeo$SYMBOLS)
+symbolgeo.lev 
+
+#rasterization
+#SUBGROUP
+r.subgroup<- rasterize(x = shpsoil, y = r.ndvi, field = "USDA14_1")
+names(r.subgroup) <- "subcode"
+plot(r.subgroup)
+# > symbolsubgroup.lev = diganti menjadi "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"
+# [1] "Alfic Hapludands=s1"     "Gawir=s2"                "Oxic Dystrudepts=s3"     "Oxyaquic Dystrudepts=s4"
+# [5] "Thaptic Hapludands=s5"   "Typic Dystrudepts=s6"    "Typic Endoaquepts-s7"    "Typic Eutrudepts=s8"    
+# [9] "Typic Hapludands=s9"     "Typic Udipsamments=s10" 
+
+#GREATGROUP
+r.greatgroup <- rasterize(x = shpsoil, y = r.ndvi, field = "g_group")
+names(r.greatgroup) <- "greatcode"
+r.greatgroup
+# > symbolgrtgroup.lev 
+# [1] "Dystrudepts=g1"  "Endoaquepts=g2"  "Eutrudepts=g3"   "Gawir=g4"  "Hapludands=g5"   "Udipsamments=g6"
+
+#ORDO
+r.ordo <- rasterize(x = shpsoil, y = r.ndvi, field = "ordo")
+names(r.ordo) <- "ordocode"
+r.ordo
+# > symbolordo.lev
+# [1] "Andisol=or1"    "Entisol=or2"  "Gawir=or3"   "Inseptisol=or4"
+
+#GEOLOGY
+r.geomap <- rasterize(x = shpgeo, y = r.ndvi, field = "SYMBOLS")
+names(r.geomap) <- "geo_code"
+# > symbolgeo.lev 
+# [1] "Qc"  "Ql"  "Qvu" "Qyd" "Qyg" "Qyl" "Qyt" "Qyu" "Tmb"
+
+
+
+##--------------ENCODING DATA CATEGORICAL RASTER-----------
+library(raster)
+r.enc.subgroup <-layerize (r.subgroup)
+names(r.enc.subgroup)<-c("s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10")
+r.enc.subgroup
+
+r.enc.greatgroup <-layerize (r.greatgroup)
+names(r.enc.greatgroup)<-c("g1", "g2", "g3", "g4", "g5", "g6")
+r.enc.greatgroup
+
+r.enc.ordo <-layerize (r.ordo)
+names(r.enc.ordo)<-c("or1", "or2", "or3", "or4")
+r.enc.ordo
+
+r.enc.geomap <-layerize (r.geomap)
+r.enc.geomap
+names(r.enc.geomap)<-c("Qc","Ql","Qvu", "Qyd", "Qyg", "Qyl", "Qyt", "Qyu", "Tmb")
+
+r.enc.lulc <-layerize (r.lulc)
+r.enc.lulc
+# KODE
+# 0 = builtsup
+# 1 = cropland
+# 2 = plantation
+# 3 = bareland
+# 4 = paddy
+# 5 = shrubland
+# 6 = forest
+names(r.enc.lulc)<-c("builtsup","cropland","plantation", "bareland", "paddyfield", "shrubland", "forest")
+
+
+#---------------Stacking raster categorical-----------------
+stack.categ <- stack (r.enc.subgroup, r.enc.greatgroup, r.enc.geomap, r.enc.lulc) 
+stack.categ
+
+#---------------Clip stacking raster category-----------
+stack.categ.clip <-crop(stack.categ, extent(shpcika))
+plot(stack.categ.clip$g1)
+stack.categ.clip
+
+#-------------STACKING RASTER INDEX, TOPOGRAPHY, AND CATEGORICAL--------
+#sudah coba pake raster stack yang di clip sebelumnya, tp gagal karena different extent
+stack.cov1 <-stack(covstack, stack.categ) 
+shpcika
+
+r.cov.stack<- raster::crop(stack.cov1, extent(shpcika), parallel=FALSE)
+r.cov.stack1<- raster::crop(stack.cov1, extent(shpcika))
+r.cov.stack
+getwd()
+datacov.model <- raster::extract(r.cov.stack, shpDATALAB, sp = 1,
+                                 method = "simple")
+datacov.model<- as.data.frame(datacov.model)
+str(datacov.model)
+
+## NEXT KITA ULANG PREPARING DATA KARENA STACK RASTER CONSUME LARGE MEMORY JADI TEMP DATA OTOMATIS KE DELETE
+##LANJUT KE PART "PREPARATION DATA MODEL" DISINI KITA SAVE STACK RASTER AGAR TIDAK HILANG YA.. SETTING TEMP DATA DI F DISK
+
+##--part ini merupakan code revisi thesis, jadi valley depth diulang dan hasil model diulang
+##---kemudian covariat raster sudah di clip shp cikapundung (agar tidak berat) ----
+##----------------RASTER BASE PROCESSING-RASTER STACK-----
+library(dplyr)
+library(stats)
+library(tidyverse)
+library(sf)
+library(rgdal)
+library(raster)
+#data rearrange column in data lab
+shpDATALAB <- st_read ("F:/DATA RISET/SHP/KOVARIAT ATRIBUT/COVDATALAB.shp")
+shpDATALAB$log_Corg <- log (shpDATALAB$Corg)
+colnames(shpDATALAB)
+shpDATALAB <- shpDATALAB[c("Kode_Sampe","X","Y","pH_H2O","pH_KCl","Pasir", "Debu", "Liat",
+                           "KA_Grav","KA_Vol","Moisture","ORDO","GEOLOGY","LC","geometry",
+                           "Corg", "log_Corg")]
+st_geometry_type(shpDATALAB)
+st_crs(shpDATALAB)
+
+#add data border sub das cikapudung untuk layout in map and clip area
+shpcika <-st_read("F:/DATA RISET/SHP/SUBDAS_CIKAPUNDUNG.shp")
+
+#layouting point in map
+library(ggplot2)
+library(RColorBrewer)
+ggplot() + 
+  geom_sf(data = shpDATALAB, size = 1.5, color = "black", fill = "cyan1") + 
+  ggtitle("Titik Sample") + 
+  coord_sf()
+
+pal<- brewer.pal(5, "Oranges") # we select 7 colors from the palette
+class(pal)
+plot(shpDATALAB['Corg'],
+     main = "Distribusi C-organik Sub-DAS Cikapundung",
+     breaks ="quantile" , nbreaks = 5, pal = pal)
+
+ggplot() + 
+  geom_sf(data = shpDATALAB)+
+  scale_fill_viridis_c(trans = "sqrt", alpha = .4) +
+  stat_sf_coordinates()
+
+ggplot(map) +
+  geom_sf(color = "white", aes(fill = Corg)) +
+  theme(legend.position = "none")
+
+library(viridis)
+ggplot() + 
+  geom_sf(data = shpcika) + 
+  geom_sf(data = shpDATALAB, aes(color = Corg)) +
+  coord_sf() +  scale_color_viridis(direction = -1, option ="plasma")+
+  labs(title = "Distribusi Kandungan C-organik Tanah\n di Sub-DAS Cikapundung",
+       subtitle = "Pada 146 titik sampel", 
+       caption = "Data Source: Hasil Survei 2021-2022")
+
+##-------------IMPORT RASTER--------------
+##install.packages(c("Rcpp", "rgdal", "sp", "terra", "raster"))
+library(sp)
+library(raster)
+#VAR ORGANISM
+r.ndvi <- raster("F:/DATA RISET/Raster/COVARIAT/NDVI_try3.tif")
+names(r.ndvi)<-"NDVI"
+r.ndre <- raster("F:/DATA RISET/Raster/COVARIAT/NDRE_try3.tif")
+names(r.ndre)<-"NDRE"
+r.satvi <- raster("F:/DATA RISET/Raster/COVARIAT/SATVI_try3.tif")
+names(r.satvi)<-"SATVI"
+r.evi <- raster("F:/DATA RISET/Raster/COVARIAT/EVI_try3.tif")
+names(r.evi)<-"EVI"
+r.nbr2 <- raster("F:/DATA RISET/Raster/COVARIAT/NBR2_try3.tif")
+names(r.nbr2)<-"NBR2"
+r.sti <- raster("F:/DATA RISET/Raster/COVARIAT/CMR_try3.tif")
+names(r.sti)<-"STI"
+r.msi<- raster("F:/DATA RISET/Raster/COVARIAT/FMR_try3.tif")
+names(r.msi)<-"MSI"
+r.rbri<- raster("F:/DATA RISET/Raster/COVARIAT/IOR_try3.tif")
+names(r.rbri)<-"RBRI"
+r.rgri<- raster("F:/DATA RISET/Raster/COVARIAT/FI_try3.tif")
+names(r.rgri)<-"RGRI"
+
+#VAR CLIMATE
+r.lst <- raster("F:/DATA RISET/Raster/COVARIAT/LST_2013-2022.tif")
+names(r.lst)<-"LST"
+r.chrev <- raster("F:/DATA RISET/Raster/COVARIAT/resample_CH2013-2022rev.tif")
+names(r.chrev)<-"CHrev"
+r.smi <- raster("F:/DATA RISET/Raster/COVARIAT/MSMMI_try3.tif")
+names(r.smi)<-"SMI"
+
+#VAR TOPOGRAPHY
+r.valey <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/resample_ValleyDepth.tif")
+names(r.valey)<-"VDEPTH"
+r.elev <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/resample_Elev1.tif")
+names(r.elev)<-"ELEV"
+r.slope <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/Slope_percent2.tif")
+names(r.slope)<-"SLOPE"
+r.aspect <-raster("F:/DATA RISET/Raster/COVARIAT/Topography/resample_Aspect.tif")
+names(r.aspect)<-"ASPECT"
+
+#VAR ANTROPOGENIC
+r.lulc <-raster("F:/DATA RISET/Raster/Landcover AOI Paten/land_cover_30Juni.tif")
+names(r.lulc) <- "LC"
+#--Keterangan LULC class
+# KODE
+# 0 = pemukiman
+# 1 = cropland
+# 2 = plantation
+# 3 = bareland
+# 4 = paddy
+# 5 = shrubland
+# 6 = forest
+
+#VAR PARENT MATERIAL DAN SOIL BERUPA DATA CATEGORICAL, CODE ADA DI BAWAH
+
+#stacking raster all covariate
+covstack <- stack (r.ndvi, r.ndre, r.satvi, r.evi,r.nbr2, 
+                   r.rbri, r.rgri, r.msi, r.sti, r.smi,
+                   r.lst, r.chrev, 
+                   r.valey, r.elev, r.slope, r.aspect)
+head(covstack)
+summary(covstack)
+
