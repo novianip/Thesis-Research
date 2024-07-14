@@ -1,0 +1,19 @@
+install.packages("caret")
+install.packages("doParallel")
+library(caret)
+library(doParallel)
+
+#detect number core
+no_cores <- detectCores() - 1
+
+#Create and register the parallel backend:
+cl <- makePSOCKcluster(no_cores)
+registerDoParallel(cl)
+
+#Train your model with parallel processing enabled
+train_control <- trainControl(method = "cv", number = 10, allowParallel = TRUE)
+model <- train(Species ~ ., data = iris, method = "rf", trControl = train_control)
+
+#stop cluster after training
+stopCluster(cl)
+registerDoSEQ()
