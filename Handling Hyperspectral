@@ -1,0 +1,72 @@
+#---- handling hyperspectral data--------
+# references :https://onlinelibrary.wiley.com/doi/10.1155/2018/3168974
+# Remove rows with non-finite values
+wavelength <- Spc_SiClLo_Andisols_Raw$Wavelength
+reflectance <- Spc_SiClLo_Andisols_Raw$Sample.6
+
+good_rows <- which(is.finite(wavelength) & is.finite(reflectance))
+wavelength <- wavelength[good_rows]
+reflectance <- reflectance[good_rows]
+spectrum <- cbind(wavelength, reflectance)
+spectrum <- as.data.frame(spectrum)
+continuumremoved <- continuumRemoval(reflectance, wavelength, type = "R")
+plot(continuumremoved)
+spectrum$CR3 <- continuumremoved
+summary(continuumremoved)
+
+df <- as.data.frame(cbind(wavelength, continuumremoved))
+df$CR1 <- continuumremoved
+df <- as.matrix(df)
+
+smooth_reflectance <- savitzkyGolay(Spc_SiCl_Andisols_New[,c(2:239)], m = 3, 
+                                    p = 5, w = 7)
+smoot_wavelength <- savitzkyGolay(wavelength, m = 1, p = 1, w = 15, delta.wav = 2)
+summary
+smooth_reflectance <- as.data.frame(smooth_reflectance)
+smooth_reflectance <- resize(smooth_reflectance, nrow(spectrum))
+data(NIRsoil)
+write.csv(smooth_reflectance, file = "C:\\Users\\ilmir\\OneDrive - Universitas Pertamina\\Documents\\THESIS\\PROGRESS\\OLAH DATA\\MINERAL IDENTIFICATION\\DATA\\Sgolay_SiCl_Raw_New.csv")
+savitgoly <- cbind(spectrum, sgolay)
+
+spectrum <- as.data.frame(spectrum)
+sgolay <- savitzkyGolay(X = reflectance, m = 2, 
+                                 p = 3, w = 5, delta.wav = 1)
+print(sgolay)
+summary(sgolay)
+
+smooth_reflectance<-read.csv("F:/Trial R-Hyperspectral/sgolay_result_trial.csv")
+smooth_reflectance<-smooth_reflectance[-1]
+colnames(smooth_reflectance)<-gsub("X","", colnames(smooth_reflectance))
+
+
+matplot(as.numeric(colnames(smooth_reflectance)),
+        t(smooth_reflectance),
+        type = "l",
+        xlab = "Wavelength /nm",
+        ylab = "1st derivative"
+)
+
+
+
+library(ggplot2)
+
+ggplot(data.frame(wavelength, reflectance), aes(x = wavelength, y = reflectance)) + 
+  geom_line() +
+  ggtitle("Raw Spectral Reflectance") +
+  xlab("Wavelength (nm)") +
+  ylab("Reflectance (unitless)")
+
+ggplot(data.frame(wavelength, continuumremoved), aes(x = wavelength, y = continuumremoved)) + 
+  geom_line() +
+  ggtitle("Continuum-Removed Spectral Reflectance") +
+  xlab("Wavelength (nm)") +
+  ylab("Reflectance (unitless)")
+
+ggplot(data.frame(wavelength, smooth_reflectance), aes(x = wavelength, y = smooth_reflectance)) + 
+  geom_line() +
+  ggtitle("2nd Derivative Spectra") +
+  xlab("Wavelength (nm)") +
+  ylab("2nd Derivative")
+
+write.csv(spectrum, file = "C:\\Users\\ilmir\\OneDrive - Universitas Pertamina\\Documents\\THESIS\\PROGRESS\\OLAH DATA\\MINERAL IDENTIFICATION\\DATA\\CRemoved_SICLLO_ANDISOLS.csv")
+
